@@ -1,0 +1,25 @@
+# Core numerical computing
+numpy>=1.24
+scipy>=1.10
+
+# Satellite orbit propagation (SGP4 / TLE handling)
+sgp4>=2.23
+
+# Graph algorithms (Dijkstra, A*, Bellman-Ford baseline support)
+networkx>=3.1
+
+# Visualization (2D + basic 3D)
+matplotlib>=3.7
+plotly>=5.18
+
+# Spatial indexing (KD-tree already in scipy, but explicit dependency clarity)
+scikit-learn>=1.3
+
+# Reinforcement learning (Q-learning experiments, optional extensions)
+gymnasium>=0.29
+
+# Progress tracking for simulations
+tqdm>=4.66
+
+# Data handling / utilities
+pandas>=2.0

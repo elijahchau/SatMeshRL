@@ -1,0 +1,6 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# VS Code settings and workspace local files
+.vscode/
