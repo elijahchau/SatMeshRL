@@ -39,3 +39,39 @@ def dijkstra(graph, source):
                 heapq.heappush(pq, (nd, v))
 
     return dist
+
+
+def dijkstra_with_pred(graph, source):
+    """Dijkstra that also returns predecessors for path reconstruction.
+
+    Returns a tuple (dist, pred) where `pred[node]` is the predecessor
+    on the shortest path from `source` (or None).
+    """
+    dist = {node: float("inf") for node in graph.adj}
+    pred = {node: None for node in graph.adj}
+    dist[source] = 0.0
+    pq = [(0.0, source)]
+
+    expanded = set()
+    nodes_expanded = 0
+
+    while pq:
+        d, u = heapq.heappop(pq)
+
+        # skip nodes we've already expanded
+        if u in expanded:
+            continue
+        expanded.add(u)
+        nodes_expanded += 1
+
+        if d > dist.get(u, float("inf")):
+            continue
+
+        for v, w in graph.neighbors(u):
+            nd = d + w
+            if nd < dist.get(v, float("inf")):
+                dist[v] = nd
+                pred[v] = u
+                heapq.heappush(pq, (nd, v))
+
+    return dist, pred, nodes_expanded

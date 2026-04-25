@@ -7,8 +7,6 @@ simple — experiments and environment-specific reward shaping should be
 implemented by experiment harnesses that use this class as a component.
 """
 
-import random
-
 
 class QLearningRouter:
     """

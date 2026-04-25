@@ -10,9 +10,7 @@ construction step so callers can request full network snapshots for a
 given point in time.
 """
 
-from typing import Any, Dict
-
-from graph.graph import build_graph
+from network.graph import build_graph
 from elements.propagation import PropagationEngine
 
 
@@ -26,7 +24,7 @@ class SnapshotBuilder:
     def __init__(self, satellites):
         self.engine = PropagationEngine(satellites)
 
-    def build_snapshot(self, t, k: int, max_dist: float) -> Dict[str, Any]:
+    def build_snapshot(self, t, k, max_dist):
         """Build a single snapshot at time `t`.
 
         Parameters

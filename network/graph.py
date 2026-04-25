@@ -10,13 +10,14 @@ function uses a spatial index (KD-tree) to find k-nearest neighbors,
 keeping the graph sparse and scalable.
 """
 
-from graph.spatial import SpatialIndex
+from network.spatial import SpatialIndex
 
 SPEED_OF_LIGHT = 299792.458  # km/s
 
 
 class Graph:
-    """Simple adjacency-list graph optimized for routing algorithms.
+    """
+    Simple adjacency-list graph optimized for routing algorithms.
 
     - `adj` is a dict: node_id -> list of (neighbor_id, weight)
     - Edges are directed; if undirected behavior is desired, callers
@@ -39,6 +40,19 @@ class Graph:
         """Return list of (neighbor_id, weight) for node `u`."""
 
         return self.adj.get(u, [])
+
+    def get_edge_weight(self, u, v):
+        """Return the weight for edge (u -> v) or infinity if not present.
+
+        This helper is useful for routing algorithms and for exposing a
+        clear API to higher-level components.
+        """
+
+        for nbr, w in self.adj.get(u, []):
+            if nbr == v:
+                return w
+
+        return float("inf")
 
 
 def latency(distance):
