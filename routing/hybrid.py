@@ -1,37 +1,71 @@
-"""Placeholder Q-learning module used for hybrid experiments.
+"""Hybrid routing that combines Q-learning with Dijkstra fallback.
 
-This file currently mirrors the minimal Q-learning implementation in
-`routing/qlearning.py`. For hybrid experiments (Dijkstra + Q-learning)
-the experiment harness should combine a classical shortest-path
-computation with a Q-table that encodes deviations due to congestion
-or instability.
+The hybrid strategy uses a Q-learning policy to capture dynamic effects
+such as congestion, then falls back to a deterministic shortest path
+when the learned policy fails to reach the destination reliably.
 """
 
-import random
+from routing.dijkstra import route as dijkstra_route
+from routing.qlearning import route as qlearning_route
 
 
-class QLearningRouter:
+def route(
+    graph,
+    source,
+    target,
+    qlearn_kwargs=None,
+    fallback_ratio=1.2,
+):
+    """Run a hybrid routing policy.
+
+    Inputs:
+    - graph: adjacency-list graph with weighted edges
+    - source: starting node id
+    - target: destination node id
+    - qlearn_kwargs: optional dictionary of Q-learning settings
+    - fallback_ratio: maximum ratio between Q-learning path cost and the
+      Dijkstra path cost before fallback is triggered
+
+    Output:
+    - (path, cost, details) where `path` is the chosen route, `cost` is
+      the total link cost, and `details` includes both Q-learning and
+      Dijkstra diagnostic results
+
+    The function first trains a Q-learning policy and evaluates its
+    greedy path. If that path is invalid or significantly worse than
+    the classical shortest path, the Dijkstra result is returned.
     """
-    Same minimal router interface as in `routing/qlearning.py`.
 
-    Kept separate to allow later divergence (e.g., hybrid-specific
-    methods) without changing the original Q-learning implementation.
-    """
+    qlearn_kwargs = qlearn_kwargs or {}
+    q_path, q_cost, q_details = qlearning_route(graph, source, target, **qlearn_kwargs)
 
-    def __init__(self, graph, alpha=0.1, gamma=0.9):
-        self.graph = graph
-        self.q = {}
-        self.alpha = alpha
-        self.gamma = gamma
+    d_path, d_cost, d_details = dijkstra_route(graph, source, target)
 
-    def get_q(self, u, v):
-        return self.q.get((u, v), 0)
+    use_fallback = False
+    if q_path is None:
+        use_fallback = True
+    elif d_cost == float("inf"):
+        use_fallback = False
+    elif q_cost > d_cost * fallback_ratio:
+        use_fallback = True
 
-    def update(self, u, v, reward, next_node):
-        max_next = max(
-            [self.get_q(next_node, n) for n, _ in self.graph.neighbors(next_node)],
-            default=0,
+    if use_fallback:
+        return (
+            d_path,
+            d_cost,
+            {
+                "selected": "dijkstra",
+                "qlearning": q_details,
+                "dijkstra": d_details,
+            },
         )
 
-        old = self.get_q(u, v)
-        self.q[(u, v)] = old + self.alpha * (reward + self.gamma * max_next - old)
+    return (
+        q_path,
+        q_cost,
+        {
+            "selected": "qlearning",
+            "qlearning": q_details,
+            "dijkstra": d_details,
+        },
+    )

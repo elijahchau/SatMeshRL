@@ -4,3 +4,7 @@ __pycache__/
 
 # VS Code settings and workspace local files
 .vscode/
+
+__.pytest_cache__/
+
+*.pkl

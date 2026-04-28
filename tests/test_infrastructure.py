@@ -1,168 +1,128 @@
-from routing.astar import a_star
-from routing.bellman_ford import bellman_ford
-from routing.dijkstra import dijkstra, dijkstra_with_pred
-from visualization.topology import plot_graph
-import matplotlib.pyplot as plt
-import time
-import random
+"""Unit tests for the LEO routing infrastructure.
 
-from elements.satellite import load_tle
+These tests validate link cost components, snapshot consistency, and
+routing algorithm agreement on small synthetic graphs.
+"""
+
+from os import path
+import sys
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 from elements.snapshot import SnapshotBuilder
+from network.graph import Graph
+from network.link_cost import (
+    LinkCostModel,
+    propagation_delay,
+    queue_delay,
+    total_link_cost,
+)
+from routing.astar import a_star
+from routing.bellman_ford import route as bellman_route
+from routing.dijkstra import route as dijkstra_route
+from routing.qlearning import route as qlearning_route
 
 
-"""
-Quick infrastructure test for the LEO network simulation.
+class DummySatellite:
+    """Minimal satellite stub for snapshot testing.
 
-Run this script to verify basic propagation, graph construction, and
-Dijkstra routing work together. It performs the following steps:
+    The class returns a fixed position regardless of time, which makes
+    snapshot outputs deterministic and easy to verify.
+    """
 
-- load up to `num_sats` TLEs from `starlink_tle.txt`
-- build a snapshot at time `t=0`
-- construct a sparse graph (k-nearest, max_dist)
-- run Dijkstra from the first satellite and print summary info
+    def __init__(self, sat_id, position):
+        self.id = sat_id
+        self._position = position
 
-This is a smoke test and not a full unit test suite.
-"""
+    def propagate(self, _):
+        return self._position
 
 
-def main():
-    num_sats = 10000
-    k = 16
-    max_dist = 3000
+def test_link_cost_components():
+    """Verify propagation, queueing, and total link cost computations."""
 
-    print("Loading TLEs...")
-    sats = load_tle("./data/starlink_tle.txt", max_sats=num_sats)
-    print(f"Loaded {len(sats)} satellites")
+    distance_km = 3000
+    speed_km_s = 300000
+    prop = propagation_delay(distance_km, speed_km_s)
+    assert abs(prop - 0.01) < 1e-8
+
+    queue = queue_delay(queue_depth=10, service_rate=5, base_delay=0.0)
+    assert abs(queue - 2.0) < 1e-8
+
+    total = total_link_cost(prop, queue, congestion_factor=1.5)
+    assert abs(total - (prop + queue) * 1.5) < 1e-8
+
+
+def test_snapshot_graph_weights():
+    """Ensure snapshot graph uses the shared link cost model."""
+
+    sats = [
+        DummySatellite(0, (0.0, 0.0, 0.0)),
+        DummySatellite(1, (1000.0, 0.0, 0.0)),
+        DummySatellite(2, (2000.0, 0.0, 0.0)),
+    ]
+
+    queue_delay_by_node = {0: 0.5, 1: 0.1, 2: 0.2}
+    link_model = LinkCostModel(queue_delay_by_node=queue_delay_by_node)
 
     builder = SnapshotBuilder(sats)
+    snapshot = builder.build_snapshot(0, max_dist=5000, link_model=link_model)
 
-    print("Building snapshot at t=0...")
-    snapshot = builder.build_snapshot(0, k, max_dist)
-
-    positions = snapshot["positions"]
     graph = snapshot["graph"]
+    dist_01 = 1000.0
+    expected = propagation_delay(dist_01) + queue_delay_by_node[0]
 
-    print(
-        f"Snapshot contains {len(positions)} positions and graph nodes: {len(graph.adj)}"
+    assert abs(graph.get_edge_weight(0, 1) - expected) < 1e-8
+
+
+def test_routing_consistency_on_small_graph():
+    """Check classical routing algorithms agree on a small graph."""
+
+    graph = Graph()
+    graph.add_edge("A", "B", 1.0)
+    graph.add_edge("B", "C", 1.0)
+    graph.add_edge("A", "C", 3.0)
+
+    positions = {
+        "A": (0.0, 0.0, 0.0),
+        "B": (1.0, 0.0, 0.0),
+        "C": (2.0, 0.0, 0.0),
+    }
+
+    path_d, cost_d, _ = dijkstra_route(graph, "A", "C")
+    path_b, cost_b, _ = bellman_route(graph, "A", "C")
+    path_a, cost_a, _ = a_star(graph, positions, "A", "C")
+
+    assert path_d == ["A", "B", "C"]
+    assert path_b == ["A", "B", "C"]
+    assert path_a == ["A", "B", "C"]
+    assert abs(cost_d - 2.0) < 1e-8
+    assert abs(cost_b - 2.0) < 1e-8
+    assert abs(cost_a - 2.0) < 1e-8
+
+
+def test_qlearning_convergence_sanity():
+    """Sanity check Q-learning converges to a reasonable path."""
+
+    graph = Graph()
+    graph.add_edge("A", "B", 1.0)
+    graph.add_edge("B", "C", 1.0)
+    graph.add_edge("A", "C", 4.0)
+
+    path, cost, details = qlearning_route(
+        graph,
+        "A",
+        "C",
+        episodes=200,
+        max_hops=10,
+        epsilon=0.3,
+        epsilon_decay=0.98,
+        min_epsilon=0.05,
+        seed=7,
+        evaluate_every=10,
+        early_stop_patience=10,
     )
 
-    # pick a source and destination for path comparisons
-    keys = list(positions.keys())
-    if len(keys) < 2:
-        print("Not enough nodes for path visualization")
-        return
-
-    source = random.choice(keys)
-    target = random.choice(keys)
-    while target == source and len(keys) > 1:
-        target = random.choice(keys)
-
-    print(f"Start node: {source}")
-    print(f"Destination node: {target}")
-
-    # Run Dijkstra (with predecessor) and time it
-    t0 = time.perf_counter()
-    dist_d, pred_d, nodes_expanded_d = dijkstra_with_pred(graph, source)
-    dt_dijkstra = time.perf_counter() - t0
-
-    reachable = len([d for d in dist_d.values() if d < float("inf")])
-    print(f"Dijkstra: reachable nodes from {source}: {reachable}")
-
-    sample = list(dist_d.items())[:5]
-    print("Sample distances (Dijkstra):")
-    for node, d in sample:
-        print(f" - {node}: {d:.6f} s")
-
-    # reconstruct Dijkstra path to target
-    path_d = []
-    if pred_d.get(target) is not None or target == source:
-        cur = target
-        while cur is not None:
-            path_d.append(cur)
-            cur = pred_d.get(cur)
-        path_d.reverse()
-
-    print()
-    print(f"Dijkstra cost to {target}: {dist_d.get(target)} path len: {len(path_d)}")
-    print(f"Dijkstra processing time: {dt_dijkstra:.6f} s")
-    print(f"Dijkstra nodes expanded: {nodes_expanded_d}")
-    print(f"Dijkstra hops: {path_d}")
-
-    print()
-    print(f"Computing A* path from {source} -> {target}...")
-    t0 = time.perf_counter()
-    path_a, cost_a, nodes_expanded_a = a_star(graph, positions, source, target)
-    dt_astar = time.perf_counter() - t0
-    print(f"A* cost: {cost_a}, path length: {len(path_a) if path_a else 0}")
-    print(f"A* processing time: {dt_astar:.6f} s")
-    print(f"A* nodes expanded: {nodes_expanded_a}")
-    print(f"A* hops: {path_a}")
-
-    print()
-    print(f"Computing Bellman-Ford from {source} -> {target}...")
-    t0 = time.perf_counter()
-    dist_bf, pred, nodes_explored_b = bellman_ford(graph, source)
-    dt_bf = time.perf_counter() - t0
-
-    # reconstruct BF path
-    path_b = []
-    if pred.get(target) is not None or target == source:
-        cur = target
-        while cur is not None:
-            path_b.append(cur)
-            cur = pred.get(cur)
-        path_b.reverse()
-
-    print(
-        f"Bellman-Ford cost to {target}: {dist_bf.get(target)} path len: {len(path_b)}"
-    )
-    print(f"Bellman-Ford processing time: {dt_bf:.6f} s")
-    print(f"Bellman-Ford nodes explored (reachable): {nodes_explored_b}")
-    print(f"Bellman-Ford hops: {path_b}")
-
-    # Visualization: plot graph and overlay A* (red) and Bellman-Ford (green)
-    print("Rendering topology and overlaying paths...")
-    fig, ax = plt.subplots(figsize=(8, 8))
-    plot_graph(positions, graph)
-
-    # overlay A* path
-    if path_a:
-        xs = [positions[n][0] for n in path_a]
-        ys = [positions[n][1] for n in path_a]
-        plt.plot(
-            xs, ys, color="red", linewidth=2, alpha=0.5, label=f"A* ({dt_astar:.4f}s)"
-        )
-
-    # overlay Bellman-Ford path
-    if path_b:
-        xs = [positions[n][0] for n in path_b]
-        ys = [positions[n][1] for n in path_b]
-        plt.plot(
-            xs,
-            ys,
-            color="green",
-            linewidth=2,
-            alpha=0.5,
-            label=f"Bellman-Ford ({dt_bf:.4f}s)",
-        )
-
-    # overlay Dijkstra path
-    if path_d:
-        xs = [positions[n][0] for n in path_d]
-        ys = [positions[n][1] for n in path_d]
-        plt.plot(
-            xs,
-            ys,
-            color="blue",
-            linewidth=2,
-            alpha=0.5,
-            label=f"Dijkstra ({dt_dijkstra:.4f}s)",
-        )
-
-    plt.legend()
-    plt.title(f"Paths from {source} to {target}")
-    plt.show()
-
-
-if __name__ == "__main__":
-    main()
+    assert path is not None
+    assert cost <= 2.0 + 1e-6
+    assert details["converged_episode"] <= 200

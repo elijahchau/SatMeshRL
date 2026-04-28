@@ -1,0 +1,19 @@
+Snapshot time (s): 600
+Num satellites: 10000
+Max link distance (km): 3000
+Episodes: 1000
+Max hops per episode: 15000
+Alpha: 0.1
+Gamma: 0.9
+Epsilon start: 0.1
+Epsilon min: 0.01
+Mean queue depth: 0.150000
+Service rate: 5.0
+Converged episode: 420
+Training time (s): 956.559083
+Greedy path cost: 251.40934634124804
+Greedy path length: 6559
+Reward normalization: 0.007518
+Q-table size: 2205298
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\qtable_t10m_e1000.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\training_cost_curve_t10m_e1000.png
