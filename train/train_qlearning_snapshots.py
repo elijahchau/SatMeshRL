@@ -23,11 +23,54 @@ from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder
 from routing.qlearning import QLearningRouter
 from routing.dijkstra import route as dijkstra_route
+from network.link_cost import propagation_delay
 
 
 def ensure_output_dir(path):
     if not os.path.isdir(path):
         os.makedirs(path)
+
+
+def bfs_hops(graph, source):
+    """Return hop distances from source using BFS (unweighted)."""
+
+    from collections import deque
+
+    dist = {source: 0}
+    q = deque([source])
+    while q:
+        u = q.popleft()
+        for v, _ in graph.neighbors(u):
+            if v not in dist:
+                dist[v] = dist[u] + 1
+                q.append(v)
+
+    return dist
+
+
+def pick_distant_pair(graph, min_hops=4, rng=None):
+    """Pick a source/target pair at least min_hops apart and in different planes."""
+
+    rng = rng or random.Random()
+    nodes = list(graph.nodes())
+    if len(nodes) < 2:
+        raise ValueError("Not enough nodes to select a source/target pair.")
+
+    for _ in range(500):
+        source = rng.choice(nodes)
+        dist = bfs_hops(graph, source)
+        candidates = [n for n, h in dist.items() if h >= min_hops and n != source]
+        rng.shuffle(candidates)
+
+        for target in candidates:
+            plane_src = graph.node_metadata.get(source, {}).get("plane_id")
+            plane_tgt = graph.node_metadata.get(target, {}).get("plane_id")
+            if plane_src is None or plane_tgt is None:
+                continue
+            if plane_src != plane_tgt:
+                return source, target, dist[target]
+
+    raise ValueError("Unable to find a distant source/target pair.")
 
 
 def pick_pair_from_edges(graph, rng):
@@ -244,26 +287,159 @@ def write_episode_pairs(path, source=None, target=None, episodes=None, pairs_lis
             f.write(f"{ep},{source},{target}\n")
 
 
+def compute_edge_stats(graph):
+    """Compute min/max/mean edge weights and intra/inter-plane counts."""
+
+    weights = list(graph.edge_weights.values())
+    if not weights:
+        return None
+
+    min_w = min(weights)
+    max_w = max(weights)
+    mean_w = sum(weights) / float(len(weights))
+
+    intra = 0
+    inter = 0
+    for u, edges in graph.adj.items():
+        plane_u = graph.node_metadata.get(u, {}).get("plane_id")
+        for v, _ in edges:
+            plane_v = graph.node_metadata.get(v, {}).get("plane_id")
+            if plane_u is not None and plane_v is not None and plane_u == plane_v:
+                intra += 1
+            else:
+                inter += 1
+
+    return min_w, max_w, mean_w, intra, inter
+
+
+def compute_queue_stats(graph):
+    delays = list(graph.node_queue_delays.values())
+    if not delays:
+        return None
+    return min(delays), max(delays), sum(delays) / float(len(delays))
+
+
+def print_snapshot_diagnostics(graph, positions, min_hops, max_hops):
+    node_count = len(list(graph.nodes()))
+    edge_count = sum(len(graph.adj[n]) for n in graph.adj)
+    print(f"Graph: {node_count} nodes, {edge_count} edges")
+
+    # Sample edge diagnostics
+    sample_u = None
+    sample_v = None
+    sample_w = None
+    for u, edges in graph.adj.items():
+        if edges:
+            sample_u = u
+            sample_v, sample_w = edges[0]
+            break
+
+    if sample_u is not None:
+        ux, uy, uz = positions[sample_u]
+        vx, vy, vz = positions[sample_v]
+        dx = ux - vx
+        dy = uy - vy
+        dz = uz - vz
+        dist_km = (dx * dx + dy * dy + dz * dz) ** 0.5
+        prop_ms = propagation_delay(dist_km)
+        queue_ms = graph.node_queue_delays.get(sample_u, 0.0)
+        print(
+            "Sample edge: "
+            f"{sample_u}->{sample_v} dist={dist_km:.2f} km, "
+            f"prop_delay={prop_ms:.2f} ms, queue_delay={queue_ms:.2f} ms, "
+            f"total={sample_w:.2f} ms"
+        )
+
+    queue_stats = compute_queue_stats(graph)
+    if queue_stats is not None:
+        q_min, q_max, q_mean = queue_stats
+        print(
+            f"Node queue delays: min={q_min:.2f} ms, max={q_max:.2f} ms, "
+            f"mean={q_mean:.2f} ms"
+        )
+
+    edge_stats = compute_edge_stats(graph)
+    if edge_stats is not None:
+        min_w, max_w, mean_w, _, _ = edge_stats
+        print(
+            "Expected path cost range: "
+            f"[{min_hops * min_w:.2f}, {max_hops * max_w:.2f}] ms"
+        )
+
+
+def print_training_diagnostics(graph, path, dijkstra_cost, converged_steps):
+    if not path:
+        print("Greedy path: None")
+        return
+
+    hop_costs = []
+    for i in range(len(path) - 1):
+        hop_costs.append(graph.get_edge_weight(path[i], path[i + 1]))
+
+    total_cost = sum(hop_costs)
+    print(f"Greedy path: {path}")
+    print(f"Hop costs: {[round(c, 2) for c in hop_costs]} ms")
+    print(f"Total greedy cost: {total_cost:.2f} ms")
+    print(f"Dijkstra cost: {dijkstra_cost:.2f} ms")
+    print(f"Difference: {total_cost - dijkstra_cost:.2f} ms")
+    print(f"Total steps to convergence: {converged_steps}")
+
+
+def validate_snapshot(graph, expected_nodes=66, min_links=150):
+    """Run paper-aligned validation checks before training."""
+
+    import math
+
+    errors = []
+    node_count = len(list(graph.nodes()))
+    if node_count != expected_nodes:
+        errors.append(f"Expected {expected_nodes} nodes, found {node_count}.")
+
+    link_count = sum(len(graph.adj[n]) for n in graph.adj)
+    if link_count < min_links:
+        errors.append(f"Expected at least {min_links} links, found {link_count}.")
+
+    weights = list(graph.edge_weights.values())
+    for w in weights:
+        if not math.isfinite(w) or w <= 0:
+            errors.append("Edge weights must be positive and finite.")
+            break
+
+    if graph.node_queue_delays:
+        for q in graph.node_queue_delays.values():
+            if q < 0:
+                errors.append("Queue delays must be non-negative.")
+                break
+    else:
+        errors.append("Queue delays missing from graph.")
+
+    # Ensure plane metadata exists
+    for node in graph.nodes():
+        if graph.node_metadata.get(node, {}).get("plane_id") is None:
+            errors.append("Missing plane metadata for at least one node.")
+            break
+
+    return errors
+
+
 def main():
     # ----------------- Config -----------------
-    TLE_PATH = "./data/starlink_tle.txt"
-    NUM_SATS = 10000
+    TLE_PATH = "./data/iridium_tle.txt"
+    NUM_SATS = 66
     SNAPSHOT_TIMES_MIN = [1, 5, 10]
     MAX_DIST_KM = 3000
 
     ALPHA = 0.1
     GAMMA = 0.9
-    EPSILON_START = 0.1
-    EPSILON_MIN = 0.01
+    EPSILON_VALUES = [0.01, 0.05, 0.1]
     TERMINAL_REWARD = 10.0
 
-    EPISODES_LIST = [300, 1000, 5000, 10000]
-    MAX_HOPS = 1500  # Number of iterations (max steps per episode)
+    EPISODES_LIST = [300, 1000, 5000]
+    MAX_HOPS = 20  # Paper hop bound for 66-node constellation
 
-    # Poisson queue settings (lambda = 30 ms translated to queue depth)
+    # Queue settings (paper Eq. 3)
     LAMBDA_MS = 30.0
-    SERVICE_RATE = 5.0
-    MEAN_QUEUE = (LAMBDA_MS / 1000.0) * SERVICE_RATE
+    TRANSMISSION_RATE_MS_S = 1.0
 
     RANDOM_SEED = 42
     OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "outputs")
@@ -272,14 +448,20 @@ def main():
     ensure_output_dir(OUTPUT_DIR)
     rng = random.Random(RANDOM_SEED)
 
-    sats = load_tle(TLE_PATH, max_sats=NUM_SATS)
+    sats = load_tle(
+        TLE_PATH,
+        max_sats=NUM_SATS,
+        sampling_strategy="uniform_planes",
+        plane_count=11,
+        per_plane=6,
+    )
     builder = SnapshotBuilder(sats)
 
     for t_min in SNAPSHOT_TIMES_MIN:
         snapshot_time = t_min * 60
         queue_config = {
-            "mean_queue": MEAN_QUEUE,
-            "service_rate": SERVICE_RATE,
+            "mean_queue_ms": LAMBDA_MS,
+            "transmission_rate": TRANSMISSION_RATE_MS_S,
             "seed": RANDOM_SEED + t_min,
             "base_delay": 0.0,
         }
@@ -293,10 +475,30 @@ def main():
         positions = snap["positions"]
         graph = snap["graph"]
 
-        source, target = pick_pair_from_edges(graph, rng)
-        print(f"Snapshot {t_min} min: source={source}, target={target}")
+        errors = validate_snapshot(graph, expected_nodes=NUM_SATS, min_links=150)
+        if errors:
+            print(f"Snapshot {t_min} min validation failed:")
+            for err in errors:
+                print(f"  - {err}")
+            continue
 
-        # Baseline: run Dijkstra once for this source/target pair
+        # Paper setup: fixed source/target per snapshot, at least 4 hops apart
+        source, target, hop_distance = pick_distant_pair(graph, min_hops=4, rng=rng)
+        source_plane = graph.node_metadata.get(source, {}).get("plane_id")
+        target_plane = graph.node_metadata.get(target, {}).get("plane_id")
+        if source_plane == target_plane or hop_distance < 4:
+            print(
+                f"Snapshot {t_min} min validation failed: "
+                f"plane or hop constraint not met (hops={hop_distance})."
+            )
+            continue
+        print(
+            f"Snapshot {t_min} min: source={source} (plane {source_plane}), "
+            f"target={target} (plane {target_plane}), hops={hop_distance}"
+        )
+        print_snapshot_diagnostics(graph, positions, min_hops=4, max_hops=MAX_HOPS)
+
+        # Paper baseline: Dijkstra run once for the fixed pair
         import time as _time
 
         # copy to locals to avoid name-shadowing issues
@@ -306,173 +508,174 @@ def main():
         d_path, d_cost, d_details = dijkstra_route(graph, _src, _tgt)
         d_elapsed = _time.perf_counter() - d_start
         d_hops = len(d_path) - 1 if d_path else 0
-        # average Dijkstra hops over episodes (current setup uses same
-        # pair for all episodes so this equals d_hops)
-        avg_dijkstra_hops = float(d_hops)
 
         for episodes in EPISODES_LIST:
-            run_seed = RANDOM_SEED + episodes + t_min
-            router, stats, path, cost, elapsed = train_qlearning(
-                graph,
-                source,
-                target,
-                episodes,
-                MAX_HOPS,
-                ALPHA,
-                GAMMA,
-                EPSILON_START,
-                EPSILON_MIN,
-                seed=run_seed,
-                terminal_reward=TERMINAL_REWARD,
-                randomize_pairs=True,
-                pair_rng=rng,
-            )
+            for epsilon in EPSILON_VALUES:
+                eps_tag = str(epsilon).replace(".", "p")
+                run_seed = RANDOM_SEED + episodes + t_min + int(epsilon * 1000)
 
-            reward_norm = stats.get("reward_norm", 1.0)
-            cost_curve = episode_costs_from_rewards(
-                stats["episode_rewards"],
-                reward_norm,
-            )
-
-            qtable_path = os.path.join(
-                OUTPUT_DIR, f"models/qtable_t{t_min}m_e{episodes}.pkl"
-            )
-            with open(qtable_path, "wb") as f:
-                pickle.dump(
-                    {
-                        "q": router.q,
-                        "source": source,
-                        "target": target,
-                        "snapshot_time_s": snapshot_time,
-                        "episodes": episodes,
-                        "max_hops": MAX_HOPS,
-                        "alpha": ALPHA,
-                        "gamma": GAMMA,
-                        "epsilon_start": EPSILON_START,
-                        "epsilon_min": EPSILON_MIN,
-                        "reward_norm": reward_norm,
-                        "terminal_reward": TERMINAL_REWARD,
-                    },
-                    f,
+                router = QLearningRouter(
+                    graph,
+                    alpha=ALPHA,
+                    gamma=GAMMA,
+                    epsilon=epsilon,
+                    epsilon_decay=1.0,
+                    min_epsilon=epsilon,
+                    seed=run_seed,
                 )
 
-            plot_path = os.path.join(
-                OUTPUT_DIR, f"plots/training_cost_curve_t{t_min}m_e{episodes}.png"
-            )
-            save_plot(
-                cost_curve,
-                plot_path,
-                title=f"Q-learning cost curve (t={t_min} min, episodes={episodes})",
-            )
+                start_time = time.perf_counter()
+                stats = router.train(
+                    source,
+                    target,
+                    episodes=episodes,
+                    max_hops=MAX_HOPS,
+                    terminal_reward=TERMINAL_REWARD,
+                    evaluate_every=10,
+                    early_stop_patience=30,
+                    use_early_stopping=False,
+                    optimal_cost=d_cost,
+                )
+                elapsed = time.perf_counter() - start_time
 
-            stats_path = os.path.join(
-                OUTPUT_DIR, f"stats/training_stats_t{t_min}m_e{episodes}.txt"
-            )
-            pairs_path = os.path.join(
-                OUTPUT_DIR, f"pairs/episode_pairs_t{t_min}m_e{episodes}.txt"
-            )
-            # Parameter block
-            params = [
-                f"Snapshot time (s): {snapshot_time}",
-                f"Num satellites: {NUM_SATS}",
-                f"Max link distance (km): {MAX_DIST_KM}",
-                f"Episodes: {episodes}",
-                f"Max hops per episode: {MAX_HOPS}",
-                f"Alpha: {ALPHA}",
-                f"Gamma: {GAMMA}",
-                f"Epsilon start: {EPSILON_START}",
-                f"Epsilon min: {EPSILON_MIN}",
-                f"Terminal reward: {TERMINAL_REWARD}",
-                f"Mean queue depth: {MEAN_QUEUE:.6f}",
-                f"Service rate: {SERVICE_RATE}",
-            ]
+                path, cost = router.greedy_path(source, target, MAX_HOPS)
 
-            # Outcome statistics
-            successes = sum(1 for s in stats.get("episode_success", []) if s)
-            success_rate = (
-                successes / float(len(stats.get("episode_success", [])))
-                if stats.get("episode_success")
-                else 0.0
-            )
-            hops = stats.get("episode_hops", [])
-            avg_hops_success = (
-                sum(h for h, s in zip(hops, stats.get("episode_success", [])) if s)
-                / float(successes)
-                if successes > 0
-                else 0.0
-            )
+                reward_norm = stats.get("reward_norm", 1.0)
+                cost_curve = episode_costs_from_rewards(
+                    stats["episode_rewards"],
+                    reward_norm,
+                )
 
-            outcomes = [
-                f"Converged episode: {stats['converged_episode']}",
-                f"Training time (s): {elapsed:.6f}",
-                f"Greedy path cost: {cost}",
-                f"Greedy path length: {len(path) if path else 0}",
-                f"Average hops (successful): {avg_hops_success:.6f}",
-                f"Success rate: {success_rate:.6f}",
-                f"Reward normalization: {reward_norm:.6f}",
-                f"Q-table size: {len(router.q)}",
-                f"Dijkstra cost: {d_cost}",
-                f"Dijkstra hops: {d_hops}",
-                f"Avg Dijkstra hops: {avg_dijkstra_hops:.6f}",
-                f"Dijkstra time (s): {d_elapsed:.6f}",
-                f"Q-table file: {qtable_path}",
-                f"Cost curve file: {plot_path}",
-                f"Episode pairs file: {pairs_path}",
-            ]
+                qtable_path = os.path.join(
+                    OUTPUT_DIR,
+                    f"models/qtable_t{t_min}m_e{episodes}_eps{eps_tag}.pkl",
+                )
+                with open(qtable_path, "wb") as f:
+                    pickle.dump(
+                        {
+                            "q": router.q,
+                            "source": source,
+                            "target": target,
+                            "snapshot_time_s": snapshot_time,
+                            "episodes": episodes,
+                            "max_hops": MAX_HOPS,
+                            "alpha": ALPHA,
+                            "gamma": GAMMA,
+                            "epsilon": epsilon,
+                            "reward_norm": reward_norm,
+                            "terminal_reward": TERMINAL_REWARD,
+                        },
+                        f,
+                    )
 
-            # Combine with a blank separator line between params and outcomes
-            stats_lines = params + [""] + outcomes
+                plot_path = os.path.join(
+                    OUTPUT_DIR,
+                    f"plots/training_cost_curve_t{t_min}m_e{episodes}_eps{eps_tag}.png",
+                )
+                save_plot(
+                    cost_curve,
+                    plot_path,
+                    title=(
+                        f"Q-learning cost curve (t={t_min} min, "
+                        f"episodes={episodes}, epsilon={epsilon})"
+                    ),
+                )
 
-            write_stats_txt(stats_path, stats_lines)
-            # Write episode pairs: use recorded per-episode pairs when available
-            pairs_list = stats.get("pairs_record")
-            if pairs_list:
-                write_episode_pairs(pairs_path, pairs_list=pairs_list)
-            else:
+                stats_path = os.path.join(
+                    OUTPUT_DIR,
+                    f"stats/training_stats_t{t_min}m_e{episodes}_eps{eps_tag}.txt",
+                )
+                pairs_path = os.path.join(
+                    OUTPUT_DIR,
+                    f"pairs/episode_pairs_t{t_min}m_e{episodes}_eps{eps_tag}.txt",
+                )
+                # Parameter block
+                params = [
+                    f"Snapshot time (s): {snapshot_time}",
+                    f"Num satellites: {NUM_SATS}",
+                    f"Max link distance (km): {MAX_DIST_KM}",
+                    f"Episodes: {episodes}",
+                    f"Max hops per episode: {MAX_HOPS}",
+                    f"Alpha: {ALPHA}",
+                    f"Gamma: {GAMMA}",
+                    f"Epsilon: {epsilon}",
+                    f"Terminal reward: {TERMINAL_REWARD}",
+                    f"Mean queue (ms): {LAMBDA_MS:.6f}",
+                    f"Transmission rate (ms/s): {TRANSMISSION_RATE_MS_S:.6f}",
+                ]
+
+                # Outcome statistics
+                successes = sum(1 for s in stats.get("episode_success", []) if s)
+                success_rate = (
+                    successes / float(len(stats.get("episode_success", [])))
+                    if stats.get("episode_success")
+                    else 0.0
+                )
+                hops = stats.get("episode_hops", [])
+                avg_hops_success = (
+                    sum(h for h, s in zip(hops, stats.get("episode_success", [])) if s)
+                    / float(successes)
+                    if successes > 0
+                    else 0.0
+                )
+
+                edge_stats = compute_edge_stats(graph)
+                if edge_stats is None:
+                    min_w, max_w, mean_w, intra_links, inter_links = 0.0, 0.0, 0.0, 0, 0
+                else:
+                    min_w, max_w, mean_w, intra_links, inter_links = edge_stats
+
+                outcomes = [
+                    f"Converged episode: {stats['converged_episode']}",
+                    f"Converged steps: {stats.get('converged_steps')}",
+                    f"Total steps: {stats.get('total_steps')}",
+                    f"Mean steps per episode: {stats.get('mean_steps_per_episode'):.6f}",
+                    f"Training time (s): {elapsed:.6f}",
+                    f"Greedy path cost: {cost}",
+                    f"Greedy path length: {len(path) if path else 0}",
+                    f"Average hops (successful): {avg_hops_success:.6f}",
+                    f"Success rate: {success_rate:.6f}",
+                    f"Reward normalization: {reward_norm:.6f}",
+                    f"Q-table size: {len(router.q)}",
+                    f"Source plane: {source_plane}",
+                    f"Target plane: {target_plane}",
+                    f"BFS hop distance: {hop_distance}",
+                    f"Edge weight min: {min_w:.6f}",
+                    f"Edge weight max: {max_w:.6f}",
+                    f"Edge weight mean: {mean_w:.6f}",
+                    f"Intra-plane links: {intra_links}",
+                    f"Inter-plane links: {inter_links}",
+                    f"Dijkstra cost: {d_cost}",
+                    f"Dijkstra hops: {d_hops}",
+                    f"Dijkstra time (s): {d_elapsed:.6f}",
+                    f"Q-table file: {qtable_path}",
+                    f"Cost curve file: {plot_path}",
+                    f"Episode pairs file: {pairs_path}",
+                ]
+
+                # Combine with a blank separator line between params and outcomes
+                stats_lines = params + [""] + outcomes
+
+                write_stats_txt(stats_path, stats_lines)
                 write_episode_pairs(pairs_path, source, target, episodes)
 
-            # Compute Dijkstra averages over unique episode pairs
-            unique_pairs = set()
-            with open(pairs_path, "r", encoding="utf-8") as f:
-                # skip header
-                next(f)
-                for line in f:
-                    parts = line.strip().split(",")
-                    if len(parts) < 3:
-                        continue
-                    _, s, t = parts
-                    unique_pairs.add((s, t))
-
-            import time as _time
-
-            d_costs = []
-            d_hop_list = []
-            d_times = []
-
-            for s, t in unique_pairs:
-                ds = _time.perf_counter()
-                p, c, ddet = dijkstra_route(graph, s, t)
-                dt = _time.perf_counter() - ds
-                d_costs.append(c if c is not None else float("inf"))
-                d_hop_list.append(len(p) - 1 if p else 0)
-                d_times.append(dt)
-
-            avg_dijkstra_cost = sum(d_costs) / len(d_costs) if d_costs else float("inf")
-            avg_dijkstra_hops = sum(d_hop_list) / len(d_hop_list) if d_hop_list else 0.0
-            avg_dijkstra_time = sum(d_times) / len(d_times) if d_times else 0.0
-
-            # Append averaged Dijkstra stats to the existing stats file
-            with open(stats_path, "a", encoding="utf-8") as f:
-                f.write("\n")
-                f.write(f"Avg Dijkstra cost (unique pairs): {avg_dijkstra_cost}\n")
-                f.write(f"Avg Dijkstra hops (unique pairs): {avg_dijkstra_hops:.6f}\n")
-                f.write(
-                    f"Avg Dijkstra time (s, unique pairs): {avg_dijkstra_time:.6f}\n"
+                print_training_diagnostics(
+                    graph,
+                    path,
+                    dijkstra_cost=d_cost,
+                    converged_steps=stats.get("converged_steps"),
                 )
 
-            print(
-                f"  Episodes={episodes} | cost={cost:.6f} | converged={stats['converged_episode']} | time={elapsed:.6f}s"
-            )
+                print(
+                    "  Episodes={episodes} | epsilon={epsilon} | "
+                    "cost={cost:.6f} | converged={conv} | time={elapsed:.6f}s".format(
+                        episodes=episodes,
+                        epsilon=epsilon,
+                        cost=cost,
+                        conv=stats["converged_episode"],
+                        elapsed=elapsed,
+                    )
+                )
 
 
 if __name__ == "__main__":

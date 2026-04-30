@@ -1,32 +1,37 @@
 Snapshot time (s): 300
-Num satellites: 10000
+Num satellites: 66
 Max link distance (km): 3000
 Episodes: 1000
-Max hops per episode: 1500
+Max hops per episode: 20
 Alpha: 0.1
 Gamma: 0.9
 Epsilon start: 0.1
 Epsilon min: 0.01
 Terminal reward: 10.0
-Mean queue depth: 0.150000
-Service rate: 5.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
 
-Converged episode: 650
-Training time (s): 175.131588
-Greedy path cost: inf
-Greedy path length: 0
-Average hops (successful): 585.453125
-Success rate: 0.098462
-Reward normalization: 0.007569
-Q-table size: 905948
-Dijkstra cost: 0.008853370457494516
-Dijkstra hops: 1
-Avg Dijkstra hops: 1.136667
-Dijkstra time (s): 1.189777
+Converged episode: 340
+Converged steps: 1972
+Total steps: 1972
+Training time (s): 0.004980
+Greedy path cost: 155.91094559287114
+Greedy path length: 5
+Average hops (successful): 4.769716
+Success rate: 0.932353
+Reward normalization: 36.886730
+Q-table size: 83
+Source plane: 5
+Target plane: 6
+BFS hop distance: 4
+Edge weight min: 21.484745
+Edge weight max: 46.650136
+Edge weight mean: 36.623296
+Intra-plane links: 6
+Inter-plane links: 160
+Dijkstra cost: 155.91094559287114
+Dijkstra hops: 4
+Dijkstra time (s): 0.000053
 Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t5m_e1000.pkl
 Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t5m_e1000.png
 Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_t5m_e1000.txt
-
-Avg Dijkstra cost (unique pairs): 0.0068400553230383125
-Avg Dijkstra hops (unique pairs): 1.132308
-Avg Dijkstra time (s, unique pairs): 1.183113

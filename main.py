@@ -26,7 +26,11 @@ SHOW_PRINTS = True
 
 def run():
     # Load satellites
-    sats = load_tle("./data/starlink_tle.txt", NUM_SATELLITES)
+    sats = load_tle(
+        "./data/starlink_tle.txt",
+        NUM_SATELLITES,
+        sampling_strategy="random_n",
+    )
     builder = SnapshotBuilder(sats)
 
     # Setup matplotlib (3D)

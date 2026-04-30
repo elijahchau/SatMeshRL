@@ -44,7 +44,7 @@ def test_link_cost_components():
     distance_km = 3000
     speed_km_s = 300000
     prop = propagation_delay(distance_km, speed_km_s)
-    assert abs(prop - 0.01) < 1e-8
+    assert abs(prop - 10.0) < 1e-8
 
     queue = queue_delay(queue_depth=10, service_rate=5, base_delay=0.0)
     assert abs(queue - 2.0) < 1e-8

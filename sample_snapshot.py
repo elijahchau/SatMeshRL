@@ -36,12 +36,12 @@ def build_sample_snapshot_from_tles(
     Returns (positions, graph)
     """
 
-    sats = load_tle(tle_path, max_sats=num_sats)
+    sats = load_tle(tle_path, max_sats=num_sats, sampling_strategy="random_n")
     builder = SnapshotBuilder(sats)
 
     queue_config = {
-        "mean_queue": mean_queue,
-        "service_rate": service_rate,
+        "mean_queue_ms": mean_queue,
+        "transmission_rate": service_rate,
         "seed": seed,
     }
 

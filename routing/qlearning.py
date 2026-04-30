@@ -8,8 +8,10 @@ stopping for routing tasks.
 
 import random
 
+from routing.base import BaseRouter
 
-class QLearningRouter:
+
+class QLearningRouter(BaseRouter):
     """Tabular Q-learning router for node-to-neighbor actions.
 
     Inputs:
@@ -212,6 +214,8 @@ class QLearningRouter:
         evaluate_every=10,
         early_stop_patience=30,
         min_delta=1e-9,
+        use_early_stopping=False,
+        optimal_cost=None,
     ):
         """Train the Q-learning router for a source-target pair.
 
@@ -220,14 +224,16 @@ class QLearningRouter:
         - target: destination node id
         - episodes: number of training episodes to run
         - max_hops: maximum steps per episode before terminating
-        - reward_norm: optional normalization factor for rewards; when
-          not provided, a median edge weight is used
+                - reward_norm: optional normalization factor for rewards; when
+                    not provided, a median edge weight is used
                 - terminal_reward: bonus reward (in normalized units) when
                     reaching the target to encourage goal-directed behavior
                 - evaluate_every: episode interval for greedy policy evaluation
-        - early_stop_patience: number of evaluations without improvement
-          before terminating early
-        - min_delta: minimum cost improvement to reset patience
+                - early_stop_patience: number of evaluations without improvement
+                    before terminating early
+                - min_delta: minimum cost improvement to reset patience
+                - use_early_stopping: when True, stop once patience is exhausted
+                - optimal_cost: optional cost target used for convergence tracking
 
         Output:
         - Dictionary containing episode rewards, best-cost history,
@@ -250,6 +256,9 @@ class QLearningRouter:
         best_cost = float("inf")
         patience = 0
         converged_episode = None
+        converged_steps = None
+        total_steps = 0
+        episodes_run = 0
 
         for ep in range(episodes):
             current = source
@@ -270,6 +279,7 @@ class QLearningRouter:
                 self.update(current, action, reward, action)
 
                 hops += 1
+                total_steps += 1
                 current = action
                 if current == target:
                     success = True
@@ -281,6 +291,10 @@ class QLearningRouter:
 
             if (ep + 1) % evaluate_every == 0:
                 path, cost = self.greedy_path(source, target, max_hops)
+                if optimal_cost is not None and converged_episode is None:
+                    if abs(cost - optimal_cost) <= min_delta:
+                        converged_episode = ep + 1
+                        converged_steps = total_steps
                 if cost + min_delta < best_cost:
                     best_cost = cost
                     patience = 0
@@ -289,8 +303,10 @@ class QLearningRouter:
 
                 best_costs.append(best_cost)
 
-                if patience >= early_stop_patience:
-                    converged_episode = ep + 1
+                if use_early_stopping and patience >= early_stop_patience:
+                    if converged_episode is None:
+                        converged_episode = ep + 1
+                        converged_steps = total_steps
                     break
             else:
                 best_costs.append(best_cost)
@@ -298,8 +314,14 @@ class QLearningRouter:
             epsilon_values.append(self.epsilon)
             self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
 
+            episodes_run = ep + 1
+
         if converged_episode is None:
             converged_episode = episodes
+            converged_steps = total_steps
+
+        if episodes_run == 0:
+            episodes_run = episodes
 
         return {
             "episode_rewards": episode_rewards,
@@ -308,6 +330,9 @@ class QLearningRouter:
             "episode_hops": episode_hops,
             "episode_success": episode_success,
             "converged_episode": converged_episode,
+            "converged_steps": converged_steps,
+            "total_steps": total_steps,
+            "mean_steps_per_episode": total_steps / float(episodes_run),
             "reward_norm": reward_norm,
             "terminal_reward": terminal_reward,
         }
@@ -388,6 +413,9 @@ def route(
         "best_costs": stats["best_costs"],
         "epsilon_values": stats["epsilon_values"],
         "converged_episode": stats["converged_episode"],
+        "converged_steps": stats["converged_steps"],
+        "total_steps": stats["total_steps"],
+        "mean_steps_per_episode": stats["mean_steps_per_episode"],
         "reward_norm": stats["reward_norm"],
         "terminal_reward": stats["terminal_reward"],
     }

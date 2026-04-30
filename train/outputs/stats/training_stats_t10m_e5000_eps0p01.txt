@@ -1,0 +1,37 @@
+Snapshot time (s): 600
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 5000
+Max hops per episode: 20
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.01
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 5000
+Converged steps: 20251
+Total steps: 20251
+Mean steps per episode: 4.050200
+Training time (s): 0.056622
+Greedy path cost: 145.41625881819027
+Greedy path length: 5
+Average hops (successful): 4.050200
+Success rate: 1.000000
+Reward normalization: 37.330474
+Q-table size: 58
+Source plane: 1
+Target plane: 2
+BFS hop distance: 4
+Edge weight min: 25.507731
+Edge weight max: 54.876993
+Edge weight mean: 37.755987
+Intra-plane links: 4
+Inter-plane links: 172
+Dijkstra cost: 137.3193360131634
+Dijkstra hops: 4
+Dijkstra time (s): 0.000046
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t10m_e5000_eps0p01.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t10m_e5000_eps0p01.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_t10m_e5000_eps0p01.txt

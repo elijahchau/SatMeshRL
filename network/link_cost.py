@@ -24,7 +24,7 @@ def propagation_delay(distance_km, speed_km_s=None):
       the physical speed of light when not provided
 
     Output:
-    - Time delay representing signal travel time for this link
+    - Time delay representing signal travel time for this link (ms)
 
     The function assumes Euclidean distance is appropriate for
     inter-satellite line-of-sight links.
@@ -36,26 +36,24 @@ def propagation_delay(distance_km, speed_km_s=None):
     if speed_km_s <= 0:
         raise ValueError("Propagation speed must be positive.")
 
-    return distance_km / speed_km_s
+    # Convert seconds to milliseconds to match the paper.
+    return (distance_km / speed_km_s) * 1000.0
 
 
 def queue_delay(queue_depth, service_rate, base_delay=0.0, max_delay=None):
     """Estimate sender-side queueing delay using a simple linear model.
 
     Inputs:
-    - queue_depth: current backlog at the sender node, expressed in
-      consistent units with the service rate
-    - service_rate: effective service capacity of the sender; should be
-      positive and reflect the same unit scale as queue_depth
-    - base_delay: baseline delay added regardless of queue depth
+    - queue_depth: sampled queue length (paper Eq. 3, in milliseconds)
+    - service_rate: fixed transmission rate (dimensionless, ms/ms)
+    - base_delay: baseline delay added regardless of queue depth (ms)
     - max_delay: optional upper bound to prevent runaway queue estimates
 
     Output:
-    - Queueing delay contribution for the sender node
+    - Queueing delay contribution for the sender node in milliseconds
 
-    The model uses queue_depth / service_rate as a simple proxy. It is
-    intentionally lightweight and avoids singularities that appear in
-    M/M/1 formulations when arrival approaches service capacity.
+    The model follows queue_delay = queue_length / transmission_rate as
+    described in the reference paper (Eq. 3).
     """
 
     if service_rate <= 0:
@@ -72,12 +70,12 @@ def total_link_cost(propagation_s, queue_s, congestion_factor=1.0):
     """Combine propagation and queueing delay into a total link cost.
 
     Inputs:
-    - propagation_s: propagation delay in seconds
-    - queue_s: sender-side queueing delay in seconds
+    - propagation_s: propagation delay in milliseconds
+    - queue_s: sender-side queueing delay in milliseconds
     - congestion_factor: multiplicative penalty for congestion effects
 
     Output:
-    - Total link cost used as the edge weight for routing
+    - Total link cost used as the edge weight for routing (ms)
 
     The congestion factor is applied to the sum of propagation and queue
     delays, providing a simple way to model congestion-driven inflation.
@@ -89,10 +87,30 @@ def total_link_cost(propagation_s, queue_s, congestion_factor=1.0):
     return (propagation_s + queue_s) * congestion_factor
 
 
+def sample_queue_lengths_poisson(node_ids, mean_queue_ms, seed=None):
+    """Sample per-node queue lengths using a Poisson distribution.
+
+    Inputs:
+    - node_ids: iterable of node ids to sample for
+    - mean_queue_ms: Poisson mean in milliseconds (paper lambda)
+    - seed: optional random seed for reproducibility
+
+    Output:
+    - dict mapping node id -> queue length in milliseconds
+    """
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    node_ids = list(node_ids)
+    queue_lengths = np.random.poisson(lam=mean_queue_ms, size=len(node_ids))
+    return {nid: float(q) for nid, q in zip(node_ids, queue_lengths)}
+
+
 def sample_queue_delays_poisson(
     node_ids,
-    mean_queue,
-    service_rate,
+    mean_queue_ms,
+    transmission_rate,
     seed=None,
     base_delay=0.0,
     max_delay=None,
@@ -101,30 +119,28 @@ def sample_queue_delays_poisson(
 
     Inputs:
     - node_ids: iterable of node ids to sample for
-    - mean_queue: mean of the Poisson distribution (queue depth units)
-    - service_rate: service rate for queue delay computation
+    - mean_queue_ms: Poisson mean in milliseconds (paper lambda)
+    - transmission_rate: fixed transmission rate (dimensionless, ms/ms)
     - seed: optional random seed for reproducibility
-    - base_delay: baseline delay added to each node
+    - base_delay: baseline delay added to each node (ms)
     - max_delay: optional upper bound on queue delay
 
     Output:
-    - dict mapping node id -> queue delay in seconds
+    - dict mapping node id -> queue delay in milliseconds
 
-    The queue depths are sampled from Poisson(mean_queue) and converted
-    to queue delays via `queue_delay`.
+    The queue lengths are sampled from Poisson(mean_queue_ms) and
+    converted to queue delays via queue_delay (paper Eq. 3).
     """
 
-    if seed is not None:
-        np.random.seed(seed)
-
-    node_ids = list(node_ids)
-    queue_depths = np.random.poisson(lam=mean_queue, size=len(node_ids))
+    queue_lengths = sample_queue_lengths_poisson(
+        node_ids, mean_queue_ms=mean_queue_ms, seed=seed
+    )
     queue_delay_by_node = {}
 
-    for nid, depth in zip(node_ids, queue_depths):
+    for nid, length_ms in queue_lengths.items():
         queue_delay_by_node[nid] = queue_delay(
-            float(depth),
-            service_rate,
+            float(length_ms),
+            transmission_rate,
             base_delay=base_delay,
             max_delay=max_delay,
         )
@@ -140,13 +156,13 @@ class LinkCostModel:
 
     Inputs:
     - speed_km_s: propagation speed used for distance-based latency
-    - queue_delay_by_node: optional mapping of sender node id to queue
-      delay values that should be applied for outgoing edges
+        - queue_delay_by_node: optional mapping of sender node id to queue
+            delay values (ms) that should be applied for outgoing edges
     - congestion_by_edge: optional mapping of (u, v) pairs to a
       multiplicative congestion factor
-    - base_queue_delay: baseline queue delay added to all nodes when
-      no queue_delay_by_node entry is provided
-    - max_queue_delay: optional cap on queue delay values
+        - base_queue_delay: baseline queue delay (ms) added to all nodes
+            when no queue_delay_by_node entry is provided
+    - max_queue_delay: optional cap on queue delay values (ms)
 
     Output:
     - Link cost values produced via `link_cost` for each edge
@@ -178,7 +194,7 @@ class LinkCostModel:
         - distance_km: inter-satellite distance in kilometers
 
         Output:
-        - Total cost for routing algorithms to use as the edge weight
+        - Total cost for routing algorithms to use as the edge weight (ms)
 
         The method combines propagation delay with a sender-side queue
         delay and an optional congestion factor. If no queue delay or

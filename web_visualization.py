@@ -300,7 +300,7 @@ def build_snapshot_comparison(positions_a, positions_b, title=None):
 
 
 if __name__ == "__main__":
-    tle_lines = load_tle_lines("data/starlink_tle.txt")
+    tle_lines = load_tle_lines("data/iridium_tle.txt")
     satellites = load_satellites_from_tle(tle_lines)
 
     fig = build_orbit_figure(satellites, max_sats=300, steps=200)
