@@ -208,6 +208,7 @@ class QLearningRouter:
         episodes=200,
         max_hops=200,
         reward_norm=None,
+        terminal_reward=10.0,
         evaluate_every=10,
         early_stop_patience=30,
         min_delta=1e-9,
@@ -221,7 +222,9 @@ class QLearningRouter:
         - max_hops: maximum steps per episode before terminating
         - reward_norm: optional normalization factor for rewards; when
           not provided, a median edge weight is used
-        - evaluate_every: episode interval for greedy policy evaluation
+                - terminal_reward: bonus reward (in normalized units) when
+                    reaching the target to encourage goal-directed behavior
+                - evaluate_every: episode interval for greedy policy evaluation
         - early_stop_patience: number of evaluations without improvement
           before terminating early
         - min_delta: minimum cost improvement to reset patience
@@ -241,6 +244,8 @@ class QLearningRouter:
         episode_rewards = []
         best_costs = []
         epsilon_values = []
+        episode_hops = []
+        episode_success = []
 
         best_cost = float("inf")
         patience = 0
@@ -249,6 +254,8 @@ class QLearningRouter:
         for ep in range(episodes):
             current = source
             total_reward = 0.0
+            hops = 0
+            success = False
 
             for _ in range(max_hops):
                 action = self.select_action(current, explore=True)
@@ -257,14 +264,20 @@ class QLearningRouter:
 
                 weight = self.graph.get_edge_weight(current, action)
                 reward = -weight / reward_norm
+                if action == target:
+                    reward += terminal_reward
                 total_reward += reward
                 self.update(current, action, reward, action)
 
+                hops += 1
                 current = action
                 if current == target:
+                    success = True
                     break
 
             episode_rewards.append(total_reward)
+            episode_hops.append(hops)
+            episode_success.append(success)
 
             if (ep + 1) % evaluate_every == 0:
                 path, cost = self.greedy_path(source, target, max_hops)
@@ -292,8 +305,11 @@ class QLearningRouter:
             "episode_rewards": episode_rewards,
             "best_costs": best_costs,
             "epsilon_values": epsilon_values,
+            "episode_hops": episode_hops,
+            "episode_success": episode_success,
             "converged_episode": converged_episode,
             "reward_norm": reward_norm,
+            "terminal_reward": terminal_reward,
         }
 
 
@@ -309,6 +325,7 @@ def route(
     alpha=0.2,
     gamma=0.9,
     reward_norm=None,
+    terminal_reward=10.0,
     evaluate_every=10,
     early_stop_patience=30,
     seed=None,
@@ -327,7 +344,9 @@ def route(
     - alpha: learning rate for Q-value updates
     - gamma: discount factor for future rewards
     - reward_norm: optional reward normalization factor
-    - evaluate_every: interval for greedy policy evaluation
+        - terminal_reward: bonus reward (in normalized units) when
+            reaching the target to encourage goal-directed behavior
+        - evaluate_every: interval for greedy policy evaluation
     - early_stop_patience: evaluations without improvement before stop
     - seed: optional random seed for reproducibility
 
@@ -356,6 +375,7 @@ def route(
         episodes=episodes,
         max_hops=max_hops,
         reward_norm=reward_norm,
+        terminal_reward=terminal_reward,
         evaluate_every=evaluate_every,
         early_stop_patience=early_stop_patience,
     )
@@ -369,6 +389,7 @@ def route(
         "epsilon_values": stats["epsilon_values"],
         "converged_episode": stats["converged_episode"],
         "reward_norm": stats["reward_norm"],
+        "terminal_reward": stats["terminal_reward"],
     }
 
     return path, cost, details
