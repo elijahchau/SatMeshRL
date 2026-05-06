@@ -6,13 +6,12 @@ from os import path
 import sys
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-# Import your existing classes
+
 from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder
 
 sats = load_tle("./data/iridium_tle.txt", max_sats=66)
 
-# --- Build Snapshots --- #
 snapshot_builder = SnapshotBuilder(sats)
 
 # Times to visualize (in minutes)
@@ -20,12 +19,10 @@ times_minutes = [1, 10, 30, 60]
 snapshots = []
 
 for t_min in times_minutes:
-    t_sec = (
-        t_min * 60
-    )  # Convert minutes to seconds if your propagation engine expects seconds
+    t_sec = t_min * 60
     snapshot = snapshot_builder.build_snapshot(
         t=t_sec,
-        max_dist=3000,  # Example max distance, adjust as needed
+        max_dist=3000,
         structured_knn=True,
         k_intra=2,
         k_inter=1,

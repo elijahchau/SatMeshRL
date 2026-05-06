@@ -11,6 +11,10 @@ summary of link statistics.
 """
 
 import matplotlib.pyplot as plt
+from os import path
+import sys
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder

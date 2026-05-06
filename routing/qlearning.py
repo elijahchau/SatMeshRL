@@ -8,10 +8,8 @@ stopping for routing tasks.
 
 import random
 
-from routing.base import BaseRouter
 
-
-class QLearningRouter(BaseRouter):
+class QLearningRouter:
     """Tabular Q-learning router for node-to-neighbor actions.
 
     Inputs:
