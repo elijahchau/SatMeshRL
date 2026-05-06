@@ -113,6 +113,7 @@ def _parse_tle_records(file_path):
         records.append(
             {
                 "name": name,
+                "plane_id": name[-1],
                 "tle1": l1,
                 "tle2": l2,
                 "raan_deg": raan_deg,
@@ -146,7 +147,7 @@ def _circular_mean_deg(values):
     return ang % 360.0
 
 
-def _cluster_planes_by_raan(records, plane_count=11, iterations=5):
+def _cluster_planes_by_raan(records, plane_count=6, iterations=5):
     raans = sorted(r["raan_deg"] for r in records)
     if not raans:
         return {i: [] for i in range(plane_count)}
@@ -214,7 +215,7 @@ def _cluster_planes_by_raan(records, plane_count=11, iterations=5):
     return final_groups
 
 
-def _select_even_anomaly(records, per_plane=6):
+def _select_even_anomaly(records, per_plane=11):
     if len(records) <= per_plane:
         return list(records)
 
@@ -245,62 +246,14 @@ def _select_even_anomaly(records, per_plane=6):
     return best_choice
 
 
-def load_tle(
-    file_path,
-    max_sats=None,
-    sampling_strategy="uniform_planes",
-    plane_count=11,
-    per_plane=6,
-    seed=None,
-):
+def load_tle(file_path, max_sats=None, seed=None):
     records = _parse_tle_records(file_path)
     if not records:
         return []
 
-    if sampling_strategy == "uniform_planes":
-        needed = plane_count * per_plane
-        if max_sats is not None and max_sats != needed:
-            raise ValueError(
-                "uniform_planes requires max_sats equal to plane_count * per_plane"
-            )
-
-        groups = _cluster_planes_by_raan(records, plane_count=plane_count)
-        if any(len(groups.get(i, [])) < per_plane for i in range(plane_count)):
-            # Fallback: quantile-based RAAN bins to guarantee per-plane counts
-            records_sorted = sorted(records, key=lambda r: r["raan_deg"])
-            groups = {i: [] for i in range(plane_count)}
-            for i in range(plane_count):
-                start = int(i * len(records_sorted) / plane_count)
-                end = (
-                    int((i + 1) * len(records_sorted) / plane_count)
-                    if i < plane_count - 1
-                    else len(records_sorted)
-                )
-                groups[i] = records_sorted[start:end]
-        selected = []
-        for plane_id in range(plane_count):
-            plane_records = groups.get(plane_id, [])
-            if len(plane_records) < per_plane:
-                raise ValueError(
-                    f"Plane {plane_id} has only {len(plane_records)} satellites; "
-                    "cannot select uniform planes."
-                )
-            chosen = _select_even_anomaly(plane_records, per_plane=per_plane)
-            for rec in chosen:
-                rec = dict(rec)
-                rec["plane_id"] = plane_id
-                selected.append(rec)
-
-        records = selected
-    elif sampling_strategy == "random_n":
+    if max_sats is not None and max_sats < len(records):
         rng = random.Random(seed)
-        if max_sats is None:
-            max_sats = len(records)
-        if max_sats > len(records):
-            max_sats = len(records)
         records = rng.sample(records, k=max_sats)
-    else:
-        raise ValueError(f"Unknown sampling_strategy: {sampling_strategy}")
 
     sats = []
     for rec in records:
@@ -309,7 +262,7 @@ def load_tle(
                 rec["name"],
                 rec["tle1"],
                 rec["tle2"],
-                plane_id=rec.get("plane_id"),
+                rec["plane_id"],
                 raan_deg=rec.get("raan_deg"),
                 mean_anomaly_deg=rec.get("mean_anomaly_deg"),
             )

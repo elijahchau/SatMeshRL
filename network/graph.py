@@ -204,3 +204,94 @@ def build_graph(positions, max_dist=3000, link_model=None):
                 graph.add_edge(neighbor_id, sat_id, weight, prop_delay=propagation_ms)
 
     return graph
+
+
+import math
+
+
+def euclidean(p1, p2):
+    """Compute Euclidean distance between two 3D points."""
+    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2 + (p1[2] - p2[2]) ** 2)
+
+
+def nearest_k(positions, sat_id, candidates, k):
+    """Return the k nearest satellites to sat_id from candidates."""
+    dists = [(c, euclidean(positions[sat_id], positions[c])) for c in candidates]
+    dists.sort(key=lambda x: x[1])
+    return [c for c, _ in dists[:k]]
+
+
+def build_structured_knn_graph(
+    positions, plane_map, k_intra=2, k_inter=1, link_model=None
+):
+    """
+    Construct a structured KNN graph (Paper 2 style) for a LEO constellation.
+
+    Inputs:
+    - positions: dict mapping sat_id -> (x, y, z) in km
+    - plane_map: dict mapping sat_id -> plane_id
+    - k_intra: number of neighbors along the same plane (forward/backward)
+    - k_inter: number of neighbors in adjacent planes
+    - link_model: optional LinkCostModel instance
+
+    Output:
+    - Graph instance with structured KNN edges
+    """
+    graph = Graph()
+    link_model = link_model or LinkCostModel()
+
+    # Group satellites by plane
+    planes = {}
+    for sat_id, plane_id in plane_map.items():
+        planes.setdefault(plane_id, []).append(sat_id)
+
+    plane_ids = sorted(planes.keys())
+
+    # 1. Add intra-plane neighbors
+    for plane_id, sats in planes.items():
+        # Sort by along-track order (approx. using z-axis as proxy)
+        sats_sorted = sorted(sats, key=lambda s: positions[s][2])
+        N = len(sats_sorted)
+        for i, sat in enumerate(sats_sorted):
+            for j in range(1, k_intra + 1):
+                # Forward neighbor
+                fwd = sats_sorted[(i + j) % N]
+                dist = euclidean(positions[sat], positions[fwd])
+                prop_ms = propagation_delay(dist, link_model.speed_km_s)
+                weight = link_model.link_cost(sat, fwd, dist)
+                graph.add_edge(sat, fwd, weight, prop_delay=prop_ms)
+                # Backward neighbor
+                back = sats_sorted[(i - j) % N]
+                dist = euclidean(positions[sat], positions[back])
+                prop_ms = propagation_delay(dist, link_model.speed_km_s)
+                weight = link_model.link_cost(sat, back, dist)
+                graph.add_edge(sat, back, weight, prop_delay=prop_ms)
+
+    # 2. Add inter-plane neighbors
+    for plane_id, sats in planes.items():
+        idx = plane_ids.index(plane_id)
+        next_plane = plane_ids[(idx + 1) % len(plane_ids)]
+        prev_plane = plane_ids[(idx - 1) % len(plane_ids)]
+
+        for sat in sats:
+            # nearest in next plane
+            neighbors = nearest_k(positions, sat, planes[next_plane], k=k_inter)
+            for n in neighbors:
+                dist = euclidean(positions[sat], positions[n])
+                prop_ms = propagation_delay(dist, link_model.speed_km_s)
+                weight = link_model.link_cost(sat, n, dist)
+                graph.add_edge(sat, n, weight, prop_delay=prop_ms)
+
+            # nearest in previous plane
+            neighbors = nearest_k(positions, sat, planes[prev_plane], k=k_inter)
+            for n in neighbors:
+                dist = euclidean(positions[sat], positions[n])
+                prop_ms = propagation_delay(dist, link_model.speed_km_s)
+                weight = link_model.link_cost(sat, n, dist)
+                graph.add_edge(sat, n, weight, prop_delay=prop_ms)
+
+    # Ensure every satellite is in the adjacency map
+    for sat_id in positions.keys():
+        graph.adj.setdefault(sat_id, [])
+
+    return graph

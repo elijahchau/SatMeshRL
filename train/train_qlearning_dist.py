@@ -334,9 +334,6 @@ def main():
             snapshot_time,
             MAX_DIST_KM,
             queue_config=queue_config,
-            structured_knn=True,
-            k_intra=2,
-            k_inter=1,
         )
         positions = snap["positions"]
         graph = snap["graph"]
@@ -346,9 +343,6 @@ def main():
             snapshot_time * 2,
             MAX_DIST_KM,
             queue_config=queue_config,
-            structured_knn=True,
-            k_intra=2,
-            k_inter=1,
         )
         positions2 = snap2["positions"]
         graph2 = snap2["graph"]

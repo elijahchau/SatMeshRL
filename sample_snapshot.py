@@ -19,7 +19,7 @@ from visualization.topology import plot_graph_3d_matplotlib
 
 def build_sample_snapshot_from_tles(
     tle_path,
-    num_sats=100,
+    num_sats=66,
     snapshot_time=0,
     max_dist_km=3000,
     mean_queue=5.0,
@@ -36,7 +36,10 @@ def build_sample_snapshot_from_tles(
     Returns (positions, graph)
     """
 
-    sats = load_tle(tle_path, max_sats=num_sats, sampling_strategy="random_n")
+    sats = load_tle(
+        tle_path,
+        max_sats=num_sats,
+    )
     builder = SnapshotBuilder(sats)
 
     queue_config = {
@@ -78,7 +81,7 @@ def summarize_graph(graph):
 def main():
     # ---------- Configurable options ----------
     # Only configure number of satellites; positions come from TLEs
-    NUM_SATS = 100
+    NUM_SATS = 66
     SNAPSHOT_TIME = 0
     MAX_DIST_KM = 3000
     MEAN_QUEUE = 3.0

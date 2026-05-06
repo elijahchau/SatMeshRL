@@ -10,13 +10,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder
 
-sats = load_tle(
-    "./data/iridium_tle.txt",
-    max_sats=66,
-    sampling_strategy="uniform_planes",
-    plane_count=6,
-    per_plane=11,
-)
+sats = load_tle("./data/iridium_tle.txt", max_sats=66)
 
 # --- Build Snapshots --- #
 snapshot_builder = SnapshotBuilder(sats)
@@ -32,6 +26,9 @@ for t_min in times_minutes:
     snapshot = snapshot_builder.build_snapshot(
         t=t_sec,
         max_dist=3000,  # Example max distance, adjust as needed
+        structured_knn=True,
+        k_intra=2,
+        k_inter=1,
     )
     snapshots.append(snapshot)
 
@@ -66,3 +63,18 @@ for i, snapshot in enumerate(snapshots):
 
 plt.tight_layout()
 plt.show()
+
+graph = snapshot["graph"]
+
+total_edges = sum(len(neighbors) for neighbors in graph.adj.values())
+num_nodes = len(graph.adj)
+
+# Count edges per node
+edges_per_node = [len(neighbors) for neighbors in graph.adj.values()]
+min_edges = min(edges_per_node)
+max_edges = max(edges_per_node)
+avg_edges = sum(edges_per_node) / num_nodes
+
+print(f"Total nodes: {num_nodes}")
+print(f"Total edges: {total_edges}")
+print(f"Edges per node: min={min_edges}, max={max_edges}, avg={avg_edges:.2f}")
