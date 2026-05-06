@@ -1,0 +1,49 @@
+Snapshot time (s): 300
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 7500
+Max hops per episode: 20
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.01
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 7500
+First optimal convergence episode: 12
+Converged steps: 30751
+Total steps: 30751
+Mean steps per episode: 4.100133
+Training time (s): 0.198625
+Greedy path cost: 144.3445541538295
+Greedy path length: 5
+Average hops (successful): 4.064012
+Success rate: 0.997733
+Reward normalization: 35.938559
+Q-table size: 81
+Source plane: 0
+Target plane: 4
+BFS hop distance: 4
+Edge weight min: 23.883670
+Edge weight max: 53.009879
+Edge weight mean: 36.726870
+Intra-plane links: 0
+Inter-plane links: 166
+Dijkstra cost: 144.3445541538295
+Dijkstra hops: 4
+Dijkstra time (s): 0.000169
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t5m_e7500_eps0p01.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t5m_e7500_eps0p01.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_t5m_e7500_eps0p01.txt
+
+Second snapshot time (s): 600
+Second snapshot Dijkstra cost: inf
+Second snapshot Dijkstra hops: 0
+Second snapshot Dijkstra time (s): 0.000115
+Second snapshot greedy cost: inf
+Second snapshot greedy length: 0
+Second snapshot converged steps: 150000
+Converged steps diff (t2 - t1): 119249
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t10m_e7500_eps0p01.pkl
+Second snapshot Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t10m_e7500_eps0p01.png

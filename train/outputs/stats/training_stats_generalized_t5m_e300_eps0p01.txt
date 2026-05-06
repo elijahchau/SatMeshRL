@@ -1,0 +1,48 @@
+Snapshot time (s): 300
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 300
+Max hops per episode: 20
+Min hop distance: 4
+Num training pairs: 20
+Num eval queries: 40
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.01
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 300
+First optimal convergence episode: 30
+Converged steps: 2957
+Total steps: 2957
+Mean steps per episode: 9.856667
+Training time (s): 0.078854
+Average cost diff (Q - Dijkstra): 9.398919
+Success rate: 0.075000
+Q-table size: 700
+Reward normalization: 39.945672
+Edge weight min: 26.073053
+Edge weight max: 53.453763
+Edge weight mean: 39.103641
+Intra-plane links: 0
+Inter-plane links: 168
+Q inference time (s): 0.000584
+Dijkstra time (s): 0.001832
+Speedup: 3.136426
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t5m_e300_eps0p01.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t5m_e300_eps0p01.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_generalized_t5m_e300_eps0p01.txt
+
+Second snapshot time (s): 600
+Second snapshot training time (s): 0.059605
+Second snapshot average cost diff (Q - Dijkstra): 10.159302
+Second snapshot success rate: 0.100000
+Second snapshot Q-table size: 1089
+Second snapshot reward normalization: 37.007931
+Second snapshot Q inference time (s): 0.000794
+Second snapshot Dijkstra time (s): 0.001955
+Second snapshot speedup: 2.462536
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t10m_e300_eps0p01.pkl
+Second snapshot cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t10m_e300_eps0p01.png

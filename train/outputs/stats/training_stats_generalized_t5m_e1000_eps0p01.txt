@@ -1,0 +1,48 @@
+Snapshot time (s): 300
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 1000
+Max hops per episode: 20
+Min hop distance: 4
+Num training pairs: 20
+Num eval queries: 40
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.01
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 1000
+First optimal convergence episode: 74
+Converged steps: 6192
+Total steps: 6192
+Mean steps per episode: 6.192000
+Training time (s): 0.152180
+Average cost diff (Q - Dijkstra): 37.803338
+Success rate: 0.050000
+Q-table size: 811
+Reward normalization: 39.945672
+Edge weight min: 26.073053
+Edge weight max: 53.453763
+Edge weight mean: 39.103641
+Intra-plane links: 0
+Inter-plane links: 168
+Q inference time (s): 0.000649
+Dijkstra time (s): 0.001998
+Speedup: 3.079531
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t5m_e1000_eps0p01.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t5m_e1000_eps0p01.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_generalized_t5m_e1000_eps0p01.txt
+
+Second snapshot time (s): 600
+Second snapshot training time (s): 0.153752
+Second snapshot average cost diff (Q - Dijkstra): 76.614660
+Second snapshot success rate: 0.050000
+Second snapshot Q-table size: 1189
+Second snapshot reward normalization: 37.007931
+Second snapshot Q inference time (s): 0.001246
+Second snapshot Dijkstra time (s): 0.003338
+Second snapshot speedup: 2.678786
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t10m_e1000_eps0p01.pkl
+Second snapshot cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t10m_e1000_eps0p01.png

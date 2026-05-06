@@ -19,6 +19,8 @@ import pickle
 import random
 import matplotlib.pyplot as plt
 
+from tabulate import tabulate
+
 from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder
 from routing.qlearning import QLearningRouter
@@ -99,155 +101,21 @@ def episode_costs_from_rewards(rewards, reward_norm):
     return [-r * reward_norm for r in rewards]
 
 
-def train_qlearning(
-    graph,
-    source,
-    target,
-    episodes,
-    max_hops,
-    alpha,
-    gamma,
-    epsilon_start,
-    epsilon_min,
-    seed,
-    terminal_reward,
-    randomize_pairs=False,
-    pair_rng=None,
-):
-    """Train Q-learning for a single run and return stats + router."""
-
-    if episodes <= 1:
-        epsilon_decay = 1.0
-    else:
-        epsilon_decay = (epsilon_min / epsilon_start) ** (1.0 / (episodes - 1))
-
-    router = QLearningRouter(
-        graph,
-        alpha=alpha,
-        gamma=gamma,
-        epsilon=epsilon_start,
-        epsilon_decay=epsilon_decay,
-        min_epsilon=epsilon_min,
-        seed=seed,
-    )
-
-    # If not randomizing pairs, delegate to the router.train implementation
-    if not randomize_pairs:
-        start_time = time.perf_counter()
-        stats = router.train(
-            source,
-            target,
-            episodes=episodes,
-            max_hops=max_hops,
-            terminal_reward=terminal_reward,
-            evaluate_every=10,
-            early_stop_patience=30,
-        )
-        elapsed = time.perf_counter() - start_time
-
-        path, cost = router.greedy_path(source, target, max_hops)
-        return router, stats, path, cost, elapsed
-
-    # Custom training: sample a random (source,target) pair each episode
-    rng = pair_rng or random.Random(seed)
-
-    start_time = time.perf_counter()
-
-    episode_rewards = []
-    best_costs = []
-    epsilon_values = []
-    episode_hops = []
-    episode_success = []
-
-    best_cost = float("inf")
-    patience = 0
-    converged_episode = None
-
-    # Use reward normalization estimated from graph
-    reward_norm = router._estimate_reward_norm()
-    reward_norm = reward_norm if reward_norm > 0 else 1.0
-
-    pairs_record = []
-
-    for ep in range(episodes):
-        # pick a random source/target that have an edge between them
-        s, t = pick_pair_from_edges(graph, rng)
-        pairs_record.append((s, t))
-
-        current = s
-        total_reward = 0.0
-        hops = 0
-        success = False
-
-        for _ in range(max_hops):
-            action = router.select_action(current, explore=True)
-            if action is None:
-                break
-
-            weight = graph.get_edge_weight(current, action)
-            reward = -weight / reward_norm
-            if action == t:
-                reward += terminal_reward
-            total_reward += reward
-            router.update(current, action, reward, action)
-
-            hops += 1
-            current = action
-            if current == t:
-                success = True
-                break
-
-        episode_rewards.append(total_reward)
-        episode_hops.append(hops)
-        episode_success.append(success)
-
-        # periodic evaluation using the current episode pair
-        if (ep + 1) % 10 == 0:
-            path, cost = router.greedy_path(s, t, max_hops)
-            if cost + 1e-9 < best_cost:
-                best_cost = cost
-                patience = 0
-            else:
-                patience += 1
-            best_costs.append(best_cost)
-            if patience >= 30:
-                converged_episode = ep + 1
-                break
-        else:
-            best_costs.append(best_cost)
-
-        epsilon_values.append(router.epsilon)
-        router.epsilon = max(router.min_epsilon, router.epsilon * router.epsilon_decay)
-
-    if converged_episode is None:
-        converged_episode = episodes
-
-    elapsed = time.perf_counter() - start_time
-
-    stats = {
-        "episode_rewards": episode_rewards,
-        "best_costs": best_costs,
-        "epsilon_values": epsilon_values,
-        "episode_hops": episode_hops,
-        "episode_success": episode_success,
-        "converged_episode": converged_episode,
-        "reward_norm": reward_norm,
-        "terminal_reward": terminal_reward,
-        "pairs_record": pairs_record,
-    }
-
-    # Greedy path evaluated on last sampled pair
-    last_s, last_t = pairs_record[-1] if pairs_record else (source, target)
-    path, cost = router.greedy_path(last_s, last_t, max_hops)
-
-    return router, stats, path, cost, elapsed
-
-
-def save_plot(costs, output_path, title):
+def save_plot(costs, output_path, title, vline=None):
     """Save a cost curve plot to disk."""
 
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(costs, linewidth=1.6)
+    if vline is not None:
+        ax.axvline(
+            x=vline,
+            color="red",
+            linestyle=":",
+            linewidth=2,
+            label=f"First optimal convergence: {vline}",
+        )
+        ax.legend()
+
     ax.set_xlabel("Episode")
     ax.set_ylabel("Total Cost")
     ax.set_title(title)
@@ -385,6 +253,35 @@ def print_training_diagnostics(graph, path, dijkstra_cost, converged_steps):
     print(f"Total steps to convergence: {converged_steps}")
 
 
+def _fmt_val(value, decimals=6):
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return f"{value:.{decimals}f}"
+    return value
+
+
+def print_run_table(title, rows):
+    """Print a table of runs with requested columns using tabulate."""
+
+    if tabulate is None:
+        print("Install 'tabulate' to see formatted tables (pip install tabulate)")
+        return
+
+    headers = [
+        "episodes",
+        "epsilon",
+        "first_opt_conv",
+        "cost_diff",
+        "steps",
+        "time",
+        "dijkstra_time",
+    ]
+
+    print("\n" + title)
+    print(tabulate(rows, headers=headers, tablefmt="github"))
+
+
 def validate_snapshot(graph, expected_nodes=66, min_links=150):
     """Run paper-aligned validation checks before training."""
 
@@ -434,14 +331,14 @@ def main():
     EPSILON_VALUES = [0.01, 0.05, 0.1]
     TERMINAL_REWARD = 10.0
 
-    EPISODES_LIST = [300, 1000, 5000]
+    EPISODES_LIST = [300, 1000, 5000, 7500]
     MAX_HOPS = 20  # Paper hop bound for 66-node constellation
 
     # Queue settings (paper Eq. 3)
     LAMBDA_MS = 30.0
     TRANSMISSION_RATE_MS_S = 1.0
 
-    RANDOM_SEED = 42
+    RANDOM_SEED = 200
     OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "outputs")
     # ------------------------------------------
 
@@ -452,13 +349,16 @@ def main():
         TLE_PATH,
         max_sats=NUM_SATS,
         sampling_strategy="uniform_planes",
-        plane_count=11,
-        per_plane=6,
+        plane_count=6,
+        per_plane=11,
     )
+
     builder = SnapshotBuilder(sats)
 
     for t_min in SNAPSHOT_TIMES_MIN:
         snapshot_time = t_min * 60
+        run_rows = []
+        run_rows2 = []
         queue_config = {
             "mean_queue_ms": LAMBDA_MS,
             "transmission_rate": TRANSMISSION_RATE_MS_S,
@@ -475,7 +375,20 @@ def main():
         positions = snap["positions"]
         graph = snap["graph"]
 
+        # Also build a second snapshot at time*2 for comparison
+        queue_config_2 = dict(queue_config)
+        queue_config_2["seed"] = queue_config.get("seed", 0) + 100 + t_min
+        snap2 = builder.build_snapshot(
+            snapshot_time * 2,
+            MAX_DIST_KM,
+            link_model=None,
+            queue_config=queue_config_2,
+        )
+        positions2 = snap2["positions"]
+        graph2 = snap2["graph"]
+
         errors = validate_snapshot(graph, expected_nodes=NUM_SATS, min_links=150)
+        errors2 = validate_snapshot(graph2, expected_nodes=NUM_SATS, min_links=150)
         if errors:
             print(f"Snapshot {t_min} min validation failed:")
             for err in errors:
@@ -498,6 +411,28 @@ def main():
         )
         print_snapshot_diagnostics(graph, positions, min_hops=4, max_hops=MAX_HOPS)
 
+        # Decide whether to reuse the same pair in snapshot2
+        reuse_pair_in_snap2 = False
+        if source in graph2.nodes() and target in graph2.nodes():
+            reuse_pair_in_snap2 = True
+            source2, target2 = source, target
+            hop_distance2 = None
+        else:
+            # find a new distant pair in snapshot2
+            try:
+                source2, target2, hop_distance2 = pick_distant_pair(
+                    graph2, min_hops=4, rng=rng
+                )
+            except ValueError:
+                # fallback to an edge-based pair
+                source2, target2 = pick_pair_from_edges(graph2, rng)
+                hop_distance2 = None
+
+        if reuse_pair_in_snap2:
+            print(f"Reusing source/target for second snapshot: {source}->{target}")
+        else:
+            print(f"Second snapshot uses new pair: {source2}->{target2}")
+
         # Paper baseline: Dijkstra run once for the fixed pair
         import time as _time
 
@@ -508,6 +443,14 @@ def main():
         d_path, d_cost, d_details = dijkstra_route(graph, _src, _tgt)
         d_elapsed = _time.perf_counter() - d_start
         d_hops = len(d_path) - 1 if d_path else 0
+
+        # Dijkstra baseline for second snapshot (for comparison)
+        _src2 = source2
+        _tgt2 = target2
+        d_start2 = _time.perf_counter()
+        d_path2, d_cost2, d_details2 = dijkstra_route(graph2, _src2, _tgt2)
+        d_elapsed2 = _time.perf_counter() - d_start2
+        d_hops2 = len(d_path2) - 1 if d_path2 else 0
 
         for episodes in EPISODES_LIST:
             for epsilon in EPSILON_VALUES:
@@ -531,21 +474,24 @@ def main():
                     episodes=episodes,
                     max_hops=MAX_HOPS,
                     terminal_reward=TERMINAL_REWARD,
-                    evaluate_every=10,
+                    evaluate_every=1,
                     early_stop_patience=30,
                     use_early_stopping=False,
                     optimal_cost=d_cost,
                 )
                 elapsed = time.perf_counter() - start_time
 
+                # Final greedy path and cost after training
                 path, cost = router.greedy_path(source, target, MAX_HOPS)
 
+                # Use the reward normalization estimated during training for cost curve scaling
                 reward_norm = stats.get("reward_norm", 1.0)
                 cost_curve = episode_costs_from_rewards(
                     stats["episode_rewards"],
                     reward_norm,
                 )
 
+                # Store Q-table and stats for this run
                 qtable_path = os.path.join(
                     OUTPUT_DIR,
                     f"models/qtable_t{t_min}m_e{episodes}_eps{eps_tag}.pkl",
@@ -579,6 +525,104 @@ def main():
                         f"Q-learning cost curve (t={t_min} min, "
                         f"episodes={episodes}, epsilon={epsilon})"
                     ),
+                    vline=stats["first_optimal_converged_episode"],
+                )
+
+                # --- Run training on the second snapshot (time * 2) for comparison ---
+                router2 = QLearningRouter(
+                    graph2,
+                    alpha=ALPHA,
+                    gamma=GAMMA,
+                    epsilon=epsilon,
+                    epsilon_decay=1.0,
+                    min_epsilon=epsilon,
+                    seed=run_seed + 1,
+                )
+
+                start_time2 = time.perf_counter()
+                stats2 = router2.train(
+                    source2,
+                    target2,
+                    episodes=episodes,
+                    max_hops=MAX_HOPS,
+                    terminal_reward=TERMINAL_REWARD,
+                    evaluate_every=1,
+                    early_stop_patience=30,
+                    use_early_stopping=False,
+                    optimal_cost=d_cost2,
+                )
+                elapsed2 = time.perf_counter() - start_time2
+
+                path2, cost2 = router2.greedy_path(source2, target2, MAX_HOPS)
+
+                reward_norm2 = stats2.get("reward_norm", 1.0)
+                cost_curve2 = episode_costs_from_rewards(
+                    stats2["episode_rewards"], reward_norm2
+                )
+
+                qtable_path2 = os.path.join(
+                    OUTPUT_DIR,
+                    f"models/qtable_t{t_min*2}m_e{episodes}_eps{eps_tag}.pkl",
+                )
+                with open(qtable_path2, "wb") as f:
+                    pickle.dump(
+                        {
+                            "q": router2.q,
+                            "source": source2,
+                            "target": target2,
+                            "snapshot_time_s": snapshot_time * 2,
+                            "episodes": episodes,
+                            "max_hops": MAX_HOPS,
+                            "alpha": ALPHA,
+                            "gamma": GAMMA,
+                            "epsilon": epsilon,
+                            "reward_norm": reward_norm2,
+                            "terminal_reward": TERMINAL_REWARD,
+                        },
+                        f,
+                    )
+
+                plot_path2 = os.path.join(
+                    OUTPUT_DIR,
+                    f"plots/training_cost_curve_t{t_min*2}m_e{episodes}_eps{eps_tag}.png",
+                )
+                save_plot(
+                    cost_curve2,
+                    plot_path2,
+                    title=(
+                        f"Q-learning cost curve (t={t_min*2} min, "
+                        f"episodes={episodes}, epsilon={epsilon})"
+                    ),
+                    vline=stats2["first_optimal_converged_episode"],
+                )
+
+                # Comparison of converged steps
+                conv1 = stats.get("converged_steps") or 0
+                conv2 = stats2.get("converged_steps") or 0
+                conv_diff = conv2 - conv1
+
+                # Collect rows for the run summary table
+                run_rows.append(
+                    [
+                        episodes,
+                        _fmt_val(epsilon, decimals=3),
+                        stats.get("first_optimal_converged_episode") or "",
+                        _fmt_val(cost - d_cost, decimals=6),
+                        stats.get("converged_steps") or "",
+                        _fmt_val(elapsed, decimals=6),
+                        _fmt_val(d_elapsed, decimals=6),
+                    ]
+                )
+                run_rows2.append(
+                    [
+                        episodes,
+                        _fmt_val(epsilon, decimals=3),
+                        stats2.get("first_optimal_converged_episode") or "",
+                        _fmt_val(cost2 - d_cost2, decimals=6),
+                        stats2.get("converged_steps") or "",
+                        _fmt_val(elapsed2, decimals=6),
+                        _fmt_val(d_elapsed2, decimals=6),
+                    ]
                 )
 
                 stats_path = os.path.join(
@@ -588,6 +632,10 @@ def main():
                 pairs_path = os.path.join(
                     OUTPUT_DIR,
                     f"pairs/episode_pairs_t{t_min}m_e{episodes}_eps{eps_tag}.txt",
+                )
+                pairs_path2 = os.path.join(
+                    OUTPUT_DIR,
+                    f"pairs/episode_pairs_t{t_min*2}m_e{episodes}_eps{eps_tag}.txt",
                 )
                 # Parameter block
                 params = [
@@ -627,6 +675,7 @@ def main():
 
                 outcomes = [
                     f"Converged episode: {stats['converged_episode']}",
+                    f"First optimal convergence episode: {stats['first_optimal_converged_episode']}",
                     f"Converged steps: {stats.get('converged_steps')}",
                     f"Total steps: {stats.get('total_steps')}",
                     f"Mean steps per episode: {stats.get('mean_steps_per_episode'):.6f}",
@@ -653,13 +702,30 @@ def main():
                     f"Episode pairs file: {pairs_path}",
                 ]
 
+                # Add second snapshot outcomes for easy comparison
+                outcomes += [
+                    "",  # separator
+                    f"Second snapshot time (s): {snapshot_time * 2}",
+                    f"Second snapshot Dijkstra cost: {d_cost2}",
+                    f"Second snapshot Dijkstra hops: {d_hops2}",
+                    f"Second snapshot Dijkstra time (s): {d_elapsed2:.6f}",
+                    f"Second snapshot greedy cost: {cost2}",
+                    f"Second snapshot greedy length: {len(path2) if path2 else 0}",
+                    f"Second snapshot converged steps: {conv2}",
+                    f"Converged steps diff (t2 - t1): {conv_diff}",
+                    f"Second snapshot Q-table file: {qtable_path2}",
+                    f"Second snapshot Cost curve file: {plot_path2}",
+                ]
+
                 # Combine with a blank separator line between params and outcomes
                 stats_lines = params + [""] + outcomes
 
+                # Document results to text files
                 write_stats_txt(stats_path, stats_lines)
                 write_episode_pairs(pairs_path, source, target, episodes)
+                write_episode_pairs(pairs_path2, source2, target2, episodes)
 
-                print_training_diagnostics(
+                """print_training_diagnostics(
                     graph,
                     path,
                     dijkstra_cost=d_cost,
@@ -667,15 +733,25 @@ def main():
                 )
 
                 print(
-                    "  Episodes={episodes} | epsilon={epsilon} | "
-                    "cost={cost:.6f} | converged={conv} | time={elapsed:.6f}s".format(
+                    "\nEpisodes={episodes} | epsilon={epsilon} | "
+                    "cost={cost:.6f} | first_opt_conv={first_opt_conv} | time={elapsed:.6f}s".format(
                         episodes=episodes,
                         epsilon=epsilon,
                         cost=cost,
-                        conv=stats["converged_episode"],
+                        first_opt_conv=stats["first_optimal_converged_episode"],
                         elapsed=elapsed,
                     )
-                )
+                )"""
+
+        print_run_table(
+            f"Run summary table (t={t_min} min, pair {source}->{target})",
+            run_rows,
+        )
+        print_run_table(
+            f"Run summary table (t={t_min*2} min, pair {source2}->{target2})",
+            run_rows2,
+        )
+        print("\n")
 
 
 if __name__ == "__main__":

@@ -23,3 +23,5 @@ tqdm>=4.66
 
 # Data handling / utilities
 pandas>=2.0
+
+tabulate>=0.9

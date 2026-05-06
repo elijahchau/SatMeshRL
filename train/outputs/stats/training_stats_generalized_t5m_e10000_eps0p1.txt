@@ -1,0 +1,48 @@
+Snapshot time (s): 300
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 10000
+Max hops per episode: 20
+Min hop distance: 4
+Num training pairs: 20
+Num eval queries: 40
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.1
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 10000
+First optimal convergence episode: 22
+Converged steps: 47040
+Total steps: 47040
+Mean steps per episode: 4.704000
+Training time (s): 1.494926
+Average cost diff (Q - Dijkstra): 154.889135
+Success rate: 0.150000
+Q-table size: 791
+Reward normalization: 39.945672
+Edge weight min: 26.073053
+Edge weight max: 53.453763
+Edge weight mean: 39.103641
+Intra-plane links: 0
+Inter-plane links: 168
+Q inference time (s): 0.000742
+Dijkstra time (s): 0.002486
+Speedup: 3.351125
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t5m_e10000_eps0p1.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t5m_e10000_eps0p1.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_generalized_t5m_e10000_eps0p1.txt
+
+Second snapshot time (s): 600
+Second snapshot training time (s): 1.735585
+Second snapshot average cost diff (Q - Dijkstra): 22.133215
+Second snapshot success rate: 0.075000
+Second snapshot Q-table size: 1266
+Second snapshot reward normalization: 37.007931
+Second snapshot Q inference time (s): 0.000798
+Second snapshot Dijkstra time (s): 0.001971
+Second snapshot speedup: 2.469984
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t10m_e10000_eps0p1.pkl
+Second snapshot cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t10m_e10000_eps0p1.png

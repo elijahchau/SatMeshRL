@@ -1,0 +1,48 @@
+Snapshot time (s): 60
+Num satellites: 66
+Max link distance (km): 3000
+Episodes: 10000
+Max hops per episode: 20
+Min hop distance: 4
+Num training pairs: 20
+Num eval queries: 40
+Alpha: 0.1
+Gamma: 0.9
+Epsilon: 0.05
+Terminal reward: 10.0
+Mean queue (ms): 30.000000
+Transmission rate (ms/s): 1.000000
+
+Converged episode: 10000
+First optimal convergence episode: 69
+Converged steps: 45788
+Total steps: 45788
+Mean steps per episode: 4.578800
+Training time (s): 1.329535
+Average cost diff (Q - Dijkstra): 139.289973
+Success rate: 0.050000
+Q-table size: 779
+Reward normalization: 39.496822
+Edge weight min: 23.140010
+Edge weight max: 52.872742
+Edge weight mean: 38.939199
+Intra-plane links: 2
+Inter-plane links: 166
+Q inference time (s): 0.002251
+Dijkstra time (s): 0.002328
+Speedup: 1.034346
+Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t1m_e10000_eps0p05.pkl
+Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t1m_e10000_eps0p05.png
+Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_generalized_t1m_e10000_eps0p05.txt
+
+Second snapshot time (s): 120
+Second snapshot training time (s): 1.562399
+Second snapshot average cost diff (Q - Dijkstra): 5.308140
+Second snapshot success rate: 0.075000
+Second snapshot Q-table size: 1278
+Second snapshot reward normalization: 38.390065
+Second snapshot Q inference time (s): 0.000617
+Second snapshot Dijkstra time (s): 0.002465
+Second snapshot speedup: 3.994167
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_generalized_t2m_e10000_eps0p05.pkl
+Second snapshot cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_generalized_t2m_e10000_eps0p05.png

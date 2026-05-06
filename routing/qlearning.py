@@ -211,9 +211,9 @@ class QLearningRouter(BaseRouter):
         max_hops=200,
         reward_norm=None,
         terminal_reward=10.0,
-        evaluate_every=10,
+        evaluate_every=1,
         early_stop_patience=30,
-        min_delta=1e-9,
+        min_delta=1e-7,
         use_early_stopping=False,
         optimal_cost=None,
     ):
@@ -257,6 +257,8 @@ class QLearningRouter(BaseRouter):
         patience = 0
         converged_episode = None
         converged_steps = None
+        first_optimal_converged_episode = None
+        first_optimal_converged_steps = None
         total_steps = 0
         episodes_run = 0
 
@@ -291,10 +293,10 @@ class QLearningRouter(BaseRouter):
 
             if (ep + 1) % evaluate_every == 0:
                 path, cost = self.greedy_path(source, target, max_hops)
-                if optimal_cost is not None and converged_episode is None:
-                    if abs(cost - optimal_cost) <= min_delta:
-                        converged_episode = ep + 1
-                        converged_steps = total_steps
+                if optimal_cost is not None and first_optimal_converged_episode is None:
+                    if cost is not None and abs(cost - optimal_cost) <= min_delta:
+                        first_optimal_converged_episode = ep + 1
+                        first_optimal_converged_steps = total_steps
                 if cost + min_delta < best_cost:
                     best_cost = cost
                     patience = 0
@@ -320,6 +322,10 @@ class QLearningRouter(BaseRouter):
             converged_episode = episodes
             converged_steps = total_steps
 
+        if first_optimal_converged_episode is None:
+            first_optimal_converged_episode = episodes
+            first_optimal_converged_steps = total_steps
+
         if episodes_run == 0:
             episodes_run = episodes
 
@@ -331,6 +337,8 @@ class QLearningRouter(BaseRouter):
             "episode_success": episode_success,
             "converged_episode": converged_episode,
             "converged_steps": converged_steps,
+            "first_optimal_converged_episode": first_optimal_converged_episode,
+            "first_optimal_converged_steps": first_optimal_converged_steps,
             "total_steps": total_steps,
             "mean_steps_per_episode": total_steps / float(episodes_run),
             "reward_norm": reward_norm,
@@ -351,7 +359,7 @@ def route(
     gamma=0.9,
     reward_norm=None,
     terminal_reward=10.0,
-    evaluate_every=10,
+    evaluate_every=1,
     early_stop_patience=30,
     seed=None,
 ):
@@ -414,6 +422,8 @@ def route(
         "epsilon_values": stats["epsilon_values"],
         "converged_episode": stats["converged_episode"],
         "converged_steps": stats["converged_steps"],
+        "first_optimal_converged_episode": stats["first_optimal_converged_episode"],
+        "first_optimal_converged_steps": stats["first_optimal_converged_steps"],
         "total_steps": stats["total_steps"],
         "mean_steps_per_episode": stats["mean_steps_per_episode"],
         "reward_norm": stats["reward_norm"],

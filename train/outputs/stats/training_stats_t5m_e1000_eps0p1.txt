@@ -11,27 +11,39 @@ Mean queue (ms): 30.000000
 Transmission rate (ms/s): 1.000000
 
 Converged episode: 1000
-Converged steps: 4644
-Total steps: 4644
-Mean steps per episode: 4.644000
-Training time (s): 0.013755
-Greedy path cost: 133.78331263559275
+First optimal convergence episode: 25
+Converged steps: 5024
+Total steps: 5024
+Mean steps per episode: 5.024000
+Training time (s): 0.036689
+Greedy path cost: 144.3445541538295
 Greedy path length: 5
-Average hops (successful): 4.597793
-Success rate: 0.997000
-Reward normalization: 36.571229
-Q-table size: 79
-Source plane: 2
-Target plane: 5
+Average hops (successful): 4.671443
+Success rate: 0.977000
+Reward normalization: 35.938559
+Q-table size: 81
+Source plane: 0
+Target plane: 4
 BFS hop distance: 4
-Edge weight min: 22.309366
-Edge weight max: 51.306293
-Edge weight mean: 35.911221
-Intra-plane links: 2
-Inter-plane links: 168
-Dijkstra cost: 128.80675499765715
+Edge weight min: 23.883670
+Edge weight max: 53.009879
+Edge weight mean: 36.726870
+Intra-plane links: 0
+Inter-plane links: 166
+Dijkstra cost: 144.3445541538295
 Dijkstra hops: 4
-Dijkstra time (s): 0.000041
+Dijkstra time (s): 0.000169
 Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t5m_e1000_eps0p1.pkl
 Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t5m_e1000_eps0p1.png
 Episode pairs file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\pairs/episode_pairs_t5m_e1000_eps0p1.txt
+
+Second snapshot time (s): 600
+Second snapshot Dijkstra cost: inf
+Second snapshot Dijkstra hops: 0
+Second snapshot Dijkstra time (s): 0.000115
+Second snapshot greedy cost: inf
+Second snapshot greedy length: 0
+Second snapshot converged steps: 20000
+Converged steps diff (t2 - t1): 14976
+Second snapshot Q-table file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\models/qtable_t10m_e1000_eps0p1.pkl
+Second snapshot Cost curve file: C:\Users\elija\OneDrive - Olin College of Engineering\Desktop\ML\Newfinal\train\outputs\plots/training_cost_curve_t10m_e1000_eps0p1.png
