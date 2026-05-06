@@ -8,3 +8,5 @@ __pycache__/
 __.pytest_cache__/
 
 *.pkl
+*.png
+*.txt
