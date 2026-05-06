@@ -8,6 +8,7 @@ This script:
 - Saves Q-tables, training stats, and cost curves
 """
 
+from copy import deepcopy
 import os
 import time
 
@@ -184,7 +185,7 @@ def print_snapshot_diagnostics(graph, positions, min_hops, max_hops):
         queue_ms = graph.node_queue_delays.get(sample_u, 0.0)
         print(
             "Sample edge: "
-            f"{sample_u}->{sample_v} dist={dist_km:.2f} km, "
+            f"{sample_u} -> {sample_v} dist={dist_km:.2f} km, "
             f"prop_delay={prop_ms:.2f} ms, queue_delay={queue_ms:.2f} ms, "
             f"total={sample_w:.2f} ms"
         )
@@ -243,7 +244,7 @@ def print_run_table(title, rows):
         "episodes",
         "epsilon",
         "first_opt_conv",
-        "cost_diff",
+        "min_cost_diff",
         "steps",
         "time",
         "dijkstra_time",
@@ -434,6 +435,9 @@ def main():
                 # Final greedy path and cost after training
                 path, cost = router.greedy_path(source, target, MAX_HOPS)
 
+                best_costs = stats.get("best_costs") or []
+                min_cost = min(best_costs) if best_costs else cost
+
                 # Use the reward normalization estimated during training for cost curve scaling
                 reward_norm = stats.get("reward_norm", 1.0)
                 cost_curve = episode_costs_from_rewards(
@@ -488,6 +492,7 @@ def main():
                     min_epsilon=epsilon,
                     seed=run_seed + 1,
                 )
+                router2.q = deepcopy(router.q)
 
                 start_time2 = time.perf_counter()
                 stats2 = router2.train(
@@ -505,6 +510,9 @@ def main():
 
                 path2, cost2 = router2.greedy_path(source2, target2, MAX_HOPS)
 
+                best_costs2 = stats2.get("best_costs") or []
+                min_cost2 = min(best_costs2) if best_costs2 else cost2
+
                 reward_norm2 = stats2.get("reward_norm", 1.0)
                 cost_curve2 = episode_costs_from_rewards(
                     stats2["episode_rewards"], reward_norm2
@@ -514,23 +522,6 @@ def main():
                     OUTPUT_DIR,
                     f"models/qtable_t{t_min*2}m_e{episodes}_eps{eps_tag}.pkl",
                 )
-                with open(qtable_path2, "wb") as f:
-                    pickle.dump(
-                        {
-                            "q": router2.q,
-                            "source": source2,
-                            "target": target2,
-                            "snapshot_time_s": snapshot_time * 2,
-                            "episodes": episodes,
-                            "max_hops": MAX_HOPS,
-                            "alpha": ALPHA,
-                            "gamma": GAMMA,
-                            "epsilon": epsilon,
-                            "reward_norm": reward_norm2,
-                            "terminal_reward": TERMINAL_REWARD,
-                        },
-                        f,
-                    )
 
                 plot_path2 = os.path.join(
                     OUTPUT_DIR,
@@ -557,7 +548,7 @@ def main():
                         episodes,
                         _fmt_val(epsilon, decimals=3),
                         stats.get("first_optimal_converged_episode") or "",
-                        _fmt_val(cost - d_cost, decimals=6),
+                        _fmt_val(min_cost - d_cost, decimals=6),
                         stats.get("converged_steps") or "",
                         _fmt_val(elapsed, decimals=6),
                         _fmt_val(d_elapsed, decimals=6),
@@ -568,7 +559,7 @@ def main():
                         episodes,
                         _fmt_val(epsilon, decimals=3),
                         stats2.get("first_optimal_converged_episode") or "",
-                        _fmt_val(cost2 - d_cost2, decimals=6),
+                        _fmt_val(min_cost2 - d_cost2, decimals=6),
                         stats2.get("converged_steps") or "",
                         _fmt_val(elapsed2, decimals=6),
                         _fmt_val(d_elapsed2, decimals=6),
@@ -578,14 +569,6 @@ def main():
                 stats_path = os.path.join(
                     OUTPUT_DIR,
                     f"stats/training_stats_t{t_min}m_e{episodes}_eps{eps_tag}.txt",
-                )
-                pairs_path = os.path.join(
-                    OUTPUT_DIR,
-                    f"pairs/episode_pairs_t{t_min}m_e{episodes}_eps{eps_tag}.txt",
-                )
-                pairs_path2 = os.path.join(
-                    OUTPUT_DIR,
-                    f"pairs/episode_pairs_t{t_min*2}m_e{episodes}_eps{eps_tag}.txt",
                 )
                 # Parameter block
                 params = [
@@ -631,6 +614,7 @@ def main():
                     f"Mean steps per episode: {stats.get('mean_steps_per_episode'):.6f}",
                     f"Training time (s): {elapsed:.6f}",
                     f"Greedy path cost: {cost}",
+                    f"Min greedy cost: {min_cost}",
                     f"Greedy path length: {len(path) if path else 0}",
                     f"Average hops (successful): {avg_hops_success:.6f}",
                     f"Success rate: {success_rate:.6f}",
@@ -649,7 +633,6 @@ def main():
                     f"Dijkstra time (s): {d_elapsed:.6f}",
                     f"Q-table file: {qtable_path}",
                     f"Cost curve file: {plot_path}",
-                    f"Episode pairs file: {pairs_path}",
                 ]
 
                 # Add second snapshot outcomes for easy comparison
@@ -660,6 +643,7 @@ def main():
                     f"Second snapshot Dijkstra hops: {d_hops2}",
                     f"Second snapshot Dijkstra time (s): {d_elapsed2:.6f}",
                     f"Second snapshot greedy cost: {cost2}",
+                    f"Second snapshot min greedy cost: {min_cost2}",
                     f"Second snapshot greedy length: {len(path2) if path2 else 0}",
                     f"Second snapshot converged steps: {conv2}",
                     f"Converged steps diff (t2 - t1): {conv_diff}",
@@ -692,11 +676,11 @@ def main():
                 )"""
 
         print_run_table(
-            f"Run summary table (t={t_min} min, pair {source}->{target})",
+            f"Run summary table (t={t_min} min, pair {source} -> {target})",
             run_rows,
         )
         print_run_table(
-            f"Run summary table (t={t_min*2} min, pair {source2}->{target2})",
+            f"Run summary table (t={t_min*2} min, pair {source2} -> {target2})",
             run_rows2,
         )
         print("\n")
