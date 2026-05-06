@@ -4,10 +4,8 @@ This module provides a lightweight adjacency-list `Graph` and helper
 functions used by the snapshot builder. The graph stores directed
 edges as lists of `(neighbor_id, weight)` tuples under `adj[node]`.
 
-Graph construction uses a spatial index (KD-tree) to find neighbors
-within a fixed radius, keeping the graph sparse and scalable. Edge weights are
-computed by a shared link cost model so routing algorithms operate on
-consistent, dynamic weights.
+Edge weights are computed by a shared link cost model so routing
+algorithms operate on consistent, dynamic weights.
 """
 
 from network.spatial import SpatialIndex

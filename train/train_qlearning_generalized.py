@@ -398,7 +398,7 @@ def main():
 
         # Also build a second snapshot at time*2 for comparison
         queue_config_2 = dict(queue_config)
-        queue_config_2["seed"] = queue_config.get("seed", 0) + 100 + t_min
+        queue_config_2["seed"] = queue_config.get("seed", 0)  # + 100 + t_min
         snap2 = builder.build_snapshot(
             snapshot_time * 2,
             MAX_DIST_KM,

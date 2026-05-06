@@ -324,7 +324,7 @@ def main():
     TLE_PATH = "./data/iridium_tle.txt"
     NUM_SATS = 66
     SNAPSHOT_TIMES_MIN = [1, 5, 10]
-    MAX_DIST_KM = 3000
+    MAX_DIST_KM = 4000
 
     ALPHA = 0.1
     GAMMA = 0.9
