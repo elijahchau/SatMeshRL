@@ -20,7 +20,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from routing.astar import a_star
 from routing.bellman_ford import bellman_ford
 from routing.dijkstra import dijkstra, dijkstra_with_pred
-from visualization.topology import plot_graph
+from network.topology import plot_graph
 import matplotlib.pyplot as plt
 import time
 import random

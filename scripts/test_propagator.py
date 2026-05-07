@@ -1,8 +1,13 @@
 import matplotlib.pyplot as plt
 import matplotlib
+
+from os import path
+import sys
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from elements.snapshot import SnapshotBuilder
 from elements.satellite import load_tle
-from visualization.topology import (
+from network.topology import (
     draw_edges,
     plot_graph,
     draw_edges_3d,
@@ -13,10 +18,10 @@ from visualization.topology import (
 # CONFIGURATION
 # =========================
 START_TIME = 0
-STOP_TIME = 6000
+STOP_TIME = 600
 TIME_STEP = 5
 
-NUM_SATELLITES = 200
+NUM_SATELLITES = 66
 MAX_DIST = 3000
 
 PAUSE_TIME = 0.05
@@ -26,11 +31,7 @@ SHOW_PRINTS = True
 
 def run():
     # Load satellites
-    sats = load_tle(
-        "./data/starlink_tle.txt",
-        NUM_SATELLITES,
-        sampling_strategy="random_n",
-    )
+    sats = load_tle("./data/iridium_tle.txt", NUM_SATELLITES)
     builder = SnapshotBuilder(sats)
 
     # Setup matplotlib (3D)

@@ -11,6 +11,10 @@ import numpy as np
 import plotly.colors as pc
 import plotly.graph_objects as go
 from sgp4.api import Satrec, jday
+from os import path
+import sys
+
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 
 def load_tle_lines(path):

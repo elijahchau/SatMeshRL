@@ -18,7 +18,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 from elements.satellite import load_tle
 from elements.snapshot import SnapshotBuilder
-from visualization.topology import plot_graph_3d_matplotlib
+from network.topology import plot_graph_3d_matplotlib
 
 
 def build_sample_snapshot_from_tles(
@@ -96,7 +96,7 @@ def main():
     # ------------------------------------------
 
     positions, graph = build_sample_snapshot_from_tles(
-        tle_path="./data/starlink_tle.txt",
+        tle_path="./data/iridium_tle.txt",
         num_sats=NUM_SATS,
         snapshot_time=SNAPSHOT_TIME,
         max_dist_km=MAX_DIST_KM,
